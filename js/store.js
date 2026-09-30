@@ -18,7 +18,7 @@ const BLOB_STORE = 'images';
 const META_STORE = 'meta';
 
 export const DEFAULT_SETTINGS = {
-  theme: 'dark',
+  theme: 'auto',                  // 'auto' follows the OS setting
   currency: 'USD',
   locale: undefined,
   pnlColors: 'greenred',          // or 'blueorange' (colour-vision friendly)

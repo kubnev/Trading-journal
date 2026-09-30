@@ -55,11 +55,22 @@ export const go = path => { location.hash = '#' + path; };
 
 function sectionOf(path) { return path.startsWith('/networth') ? 'networth' : path.startsWith('/trading') ? 'trading' : null; }
 
+const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+const resolvedTheme = () => { const t = store.getSettings().theme; return t === 'auto' || !t ? (darkMQ.matches ? 'dark' : 'light') : t; };
 function applyTheme() {
   const s = store.getSettings();
-  document.documentElement.dataset.theme = s.theme;
+  const t = resolvedTheme();
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('tj.theme', s.theme || 'auto'); } catch {}
   document.documentElement.dataset.pnl = s.pnlColors;
 }
+
+const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+const THEME_ICON = {
+  auto: 'M12 3a9 9 0 1 0 0 18V3zM12 3a9 9 0 0 1 0 18',
+  light: 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  dark: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
+};
 
 function renderShell(path) {
   const s = store.getSettings();
@@ -82,7 +93,7 @@ function renderShell(path) {
       <nav class="nav">${items.map(i => html`<a href="#${i.path}" class="${active(i)}">${icon(i.icon)}<span>${i.label}</span></a>`)}</nav>` : html`<nav class="nav"></nav>`}
     <div class="sidebar-foot">
       <a href="#/settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
-      <button class="theme-btn" data-theme-toggle aria-label="Toggle light/dark theme">${icon(s.theme === 'dark' ? 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z' : 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z')}<span>${s.theme === 'dark' ? 'Light' : 'Dark'} theme</span></button>
+      <button class="theme-btn" data-theme-toggle aria-label="Theme: ${THEME_LABEL[s.theme] || 'Auto'}. Click to change." title="Cycles Auto → Light → Dark">${icon(THEME_ICON[s.theme] || THEME_ICON.auto)}<span>Theme: ${THEME_LABEL[s.theme] || 'Auto'}</span></button>
       <div class="local-badge" title="All data is stored in this browser only (IndexedDB). Nothing is uploaded.">● Stored locally in this browser</div>
     </div>`);
   $$('[data-mode]').forEach(b => b.onclick = async () => {
@@ -91,7 +102,7 @@ function renderShell(path) {
     const item = NAV[section].find(i => i.path === currentPath());
     if (item?.pro && b.dataset.mode === 'simple') go(section === 'trading' ? '/trading' : '/networth'); else route();
   });
-  $('[data-theme-toggle]').onclick = async () => { await store.saveSettings({ theme: s.theme === 'dark' ? 'light' : 'dark' }); applyTheme(); route(); };
+  $('[data-theme-toggle]').onclick = async () => { const order = ['auto', 'light', 'dark']; await store.saveSettings({ theme: order[(order.indexOf(s.theme) + 1) % 3] }); applyTheme(); route(); };
 }
 
 let cleanup = null;
@@ -135,6 +146,8 @@ async function boot() {
     return;
   }
   applyTheme();
+  // In Auto mode, follow OS light/dark changes live (charts re-render with new colours)
+  darkMQ.addEventListener('change', () => { if ((store.getSettings().theme || 'auto') === 'auto') route(); });
   window.addEventListener('hashchange', route);
   let rt;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (window.innerWidth < 900) document.body.classList.remove('nav-open'); }, 150); });

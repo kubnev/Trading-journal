@@ -34,7 +34,7 @@ export default async function settingsView(el) {
               </select>
             </label>
             <label class="field">Theme
-              <select name="theme"><option value="dark" ${s.theme === 'dark' ? raw('selected') : ''}>Dark</option><option value="light" ${s.theme === 'light' ? raw('selected') : ''}>Light</option></select>
+              <select name="theme"><option value="auto" ${s.theme === 'auto' ? raw('selected') : ''}>Auto (match system)</option><option value="dark" ${s.theme === 'dark' ? raw('selected') : ''}>Dark</option><option value="light" ${s.theme === 'light' ? raw('selected') : ''}>Light</option></select>
             </label>
           </div>
           <p class="small muted mt">Amounts are tracked in one base currency. If you hold accounts in other currencies, enter their converted value.</p>
