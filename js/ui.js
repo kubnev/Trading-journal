@@ -1,5 +1,4 @@
 import { getSettings } from './store.js';
-import { toastSuffix } from './alex.js';
 
 // ---------- escaping / templating ----------
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -96,7 +95,7 @@ export function toast(msg, kind = 'info') {
   const t = document.createElement('div');
   t.className = 'toast ' + kind;
   t.setAttribute('role', 'status');
-  t.textContent = msg + (kind === 'error' ? '' : toastSuffix());
+  t.textContent = msg;
   host.append(t);
   setTimeout(() => t.classList.add('out'), 2600);
   setTimeout(() => t.remove(), 3000);
