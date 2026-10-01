@@ -1,6 +1,7 @@
 import * as store from './store.js';
 import { html, raw, $, $$, esc } from './ui.js';
 import { destroyAll } from './charts.js';
+import { isAlex, navLabel, decoratePage, PORTAL_SVG } from './alex.js';
 
 import homeView from './home.js';
 import settingsView from './settings.js';
@@ -56,12 +57,13 @@ export const go = path => { location.hash = '#' + path; };
 function sectionOf(path) { return path.startsWith('/networth') ? 'networth' : path.startsWith('/trading') ? 'trading' : null; }
 
 const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
-const resolvedTheme = () => { const t = store.getSettings().theme; return t === 'auto' || !t ? (darkMQ.matches ? 'dark' : 'light') : t; };
+const resolvedTheme = () => { if (isAlex()) return 'dark'; const t = store.getSettings().theme; return t === 'auto' || !t ? (darkMQ.matches ? 'dark' : 'light') : t; };
 function applyTheme() {
   const s = store.getSettings();
   const t = resolvedTheme();
   document.documentElement.dataset.theme = t;
-  try { localStorage.setItem('tj.theme', s.theme || 'auto'); } catch {}
+  if (isAlex()) document.documentElement.dataset.alex = 'on'; else delete document.documentElement.dataset.alex;
+  try { localStorage.setItem('tj.theme', isAlex() ? 'alex' : s.theme || 'auto'); } catch {}
   document.documentElement.dataset.pnl = s.pnlColors;
 }
 
@@ -80,7 +82,7 @@ function renderShell(path) {
   const items = section ? NAV[section].filter(i => !i.pro || mode === 'pro') : [];
   const active = i => (i.path === path || (i.path !== '/trading' && i.path !== '/networth' && path.startsWith(i.path)) || (i.path === '/trading/trades' && path.startsWith('/trading/trade'))) ? 'active' : '';
   $('#sidebar').innerHTML = String(html`
-    <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Journal</span></a>
+    <a class="brand" href="#/">${isAlex() ? raw(`<span class="portal-mark">${PORTAL_SVG}</span>`) : raw('<span class="brand-mark" aria-hidden="true"></span>')}<span>${isAlex() ? 'Portal Journal' : 'Journal'}</span></a>
     <div class="section-switch" role="tablist" aria-label="Section">
       <a role="tab" href="#/trading" class="${section === 'trading' ? 'on' : ''}" aria-selected="${section === 'trading'}">Trading</a>
       <a role="tab" href="#/networth" class="${section === 'networth' ? 'on' : ''}" aria-selected="${section === 'networth'}">Net worth</a>
@@ -90,11 +92,11 @@ function renderShell(path) {
         <button data-mode="simple" class="${mode === 'simple' ? 'on' : ''}">Simple</button>
         <button data-mode="pro" class="${mode === 'pro' ? 'on' : ''}">Pro</button>
       </div>
-      <nav class="nav">${items.map(i => html`<a href="#${i.path}" class="${active(i)}">${icon(i.icon)}<span>${i.label}</span></a>`)}</nav>` : html`<nav class="nav"></nav>`}
+      <nav class="nav">${items.map(i => html`<a href="#${i.path}" class="${active(i)}">${icon(i.icon)}<span>${navLabel(i.path, i.label)}</span></a>`)}</nav>` : html`<nav class="nav"></nav>`}
     <div class="sidebar-foot">
-      <a href="#/settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
+      <a href="#/settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>${navLabel('/settings', 'Settings & data')}</span></a>
       <button class="theme-btn" data-theme-toggle aria-label="Theme: ${THEME_LABEL[s.theme] || 'Auto'}. Click to change." title="Cycles Auto → Light → Dark">${icon(THEME_ICON[s.theme] || THEME_ICON.auto)}<span>Theme: ${THEME_LABEL[s.theme] || 'Auto'}</span></button>
-      <div class="local-badge" title="All data is stored in this browser only (IndexedDB). Nothing is uploaded.">● Stored locally in this browser</div>
+      ${isAlex() ? html`<div class="alex-badge">🧪 Alex mode</div>` : ''}<div class="local-badge" title="All data is stored in this browser only (IndexedDB). Nothing is uploaded.">● Stored locally in this browser</div>
     </div>`);
   $$('[data-mode]').forEach(b => b.onclick = async () => {
     await store.saveSettings({ [modeKey]: b.dataset.mode });
@@ -126,10 +128,12 @@ export async function route() {
     page.className = 'page';
     main.append(page);
     cleanup = await view(page, params, { mode: sectionOf(path) === 'networth' ? store.getSettings().networthMode : store.getSettings().tradingMode });
+    decoratePage(page);
+    $('.topbar .brand').innerHTML = isAlex() ? `<span class="portal-mark">${PORTAL_SVG}</span><span>Portal Journal</span>` : '<span class="brand-mark" aria-hidden="true"></span><span>Journal</span>';
     main.scrollTop = 0;
     window.scrollTo(0, 0);
     const h = page.querySelector('h1');
-    document.title = (h ? h.textContent + ' · ' : '') + 'Journal';
+    document.title = (h ? h.textContent + ' · ' : '') + (isAlex() ? 'Portal Journal' : 'Journal');
   } catch (e) {
     console.error(e);
     $('#main').innerHTML = `<div class="page"><h1>Something went wrong</h1><pre class="err">${esc(e.stack || e.message)}</pre></div>`;

@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'auto',                  // 'auto' follows the OS setting
   currency: 'USD',
   locale: undefined,
+  alexMode: false,                // Rick and Morty skin (cosmetic only)
   pnlColors: 'greenred',          // or 'blueorange' (colour-vision friendly)
   tradingMode: 'simple',          // 'simple' | 'pro'
   networthMode: 'simple',

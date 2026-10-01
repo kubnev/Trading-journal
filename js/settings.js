@@ -16,6 +16,10 @@ export default async function settingsView(el) {
     <div class="page-head"><div><h1>Settings & data</h1><div class="sub">Preferences, backups, import/export.</div></div></div>
     <div class="grid g2">
       <div class="stack">
+        <div class="card alex-card">
+          <div class="row"><div><h2>Alex mode</h2><p class="small muted" style="margin:4px 0 0">Rick and Morty skin for the whole site — portal green, space background, themed names. Purely cosmetic; your numbers don't change.</p></div><span class="spacer"></span>
+          <button type="button" class="switch ${s.alexMode ? 'on' : ''}" role="switch" aria-checked="${s.alexMode ? 'true' : 'false'}" data-act="alex"><span class="knob"></span><span class="sr">Alex mode</span></button></div>
+        </div>
         <form class="card" id="prefs">
           <div class="card-head"><h2>Preferences</h2></div>
           <div class="form-grid">
@@ -110,7 +114,10 @@ export default async function settingsView(el) {
   el.addEventListener('click', async e => {
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
-    if (a === 'export' || a === 'export-lite') {
+    if (a === 'alex') {
+      await store.saveSettings({ alexMode: !s.alexMode });
+      toast(store.getSettings().alexMode ? 'Alex mode on' : 'Alex mode off'); refresh();
+    } else if (a === 'export' || a === 'export-lite') {
       const b = await store.exportBackup({ includeImages: a === 'export' });
       download(`journal-backup-${today()}.json`, JSON.stringify(b));
       toast('Backup downloaded');
