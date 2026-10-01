@@ -1,6 +1,7 @@
 import * as store from './store.js';
-import { html, raw, $, $$, esc } from './ui.js';
+import { html, raw, $, $$, esc, toast, download, today } from './ui.js';
 import { destroyAll } from './charts.js';
+import { checkForUpdate, applyUpdate } from './version.js';
 
 import homeView from './home.js';
 import settingsView from './settings.js';
@@ -66,43 +67,36 @@ function applyTheme() {
 }
 
 const THEME_LABEL = { auto: 'Auto', light: 'Light', dark: 'Dark' };
-const THEME_ICON = {
-  auto: 'M12 3a9 9 0 1 0 0 18V3zM12 3a9 9 0 0 1 0 18',
-  light: 'M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
-  dark: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
-};
 
 function renderShell(path) {
   const s = store.getSettings();
   const section = sectionOf(path);
-  const modeKey = section === 'networth' ? 'networthMode' : 'tradingMode';
-  const mode = section ? s[modeKey] : null;
+  const mode = s.mode;
   const items = section ? NAV[section].filter(i => !i.pro || mode === 'pro') : [];
   const active = i => (i.path === path || (i.path !== '/trading' && i.path !== '/networth' && path.startsWith(i.path)) || (i.path === '/trading/trades' && path.startsWith('/trading/trade'))) ? 'active' : '';
   $('#sidebar').innerHTML = String(html`
-    <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Journal</span></a>
+    <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Journal</span><span class="beta">beta</span></a>
+    <div class="mode-switch" role="radiogroup" aria-label="Detail level" title="Simple shows the essentials. Pro unlocks every field, report and chart — everywhere.">
+      <button role="radio" data-mode="simple" class="${mode !== 'pro' ? 'on' : ''}" aria-checked="${mode !== 'pro'}">Simple</button>
+      <button role="radio" data-mode="pro" class="${mode === 'pro' ? 'on' : ''}" aria-checked="${mode === 'pro'}">Pro</button>
+    </div>
     <div class="section-switch" role="tablist" aria-label="Section">
       <a role="tab" href="#/trading" class="${section === 'trading' ? 'on' : ''}" aria-selected="${section === 'trading'}">Trading</a>
       <a role="tab" href="#/networth" class="${section === 'networth' ? 'on' : ''}" aria-selected="${section === 'networth'}">Net worth</a>
     </div>
-    ${section ? html`
-      <div class="mode-switch" title="Simple shows the essentials. Pro unlocks every field, report and chart.">
-        <button data-mode="simple" class="${mode === 'simple' ? 'on' : ''}">Simple</button>
-        <button data-mode="pro" class="${mode === 'pro' ? 'on' : ''}">Pro</button>
-      </div>
-      <nav class="nav">${items.map(i => html`<a href="#${i.path}" class="${active(i)}">${icon(i.icon)}<span>${i.label}</span></a>`)}</nav>` : html`<nav class="nav"></nav>`}
+    <nav class="nav">${items.map(i => html`<a href="#${i.path}" class="${active(i)}">${icon(i.icon)}<span>${i.label}</span></a>`)}</nav>
     <div class="sidebar-foot">
       <a href="#/settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
-      <button class="theme-btn" data-theme-toggle aria-label="Theme: ${THEME_LABEL[s.theme] || 'Auto'}. Click to change." title="Cycles Auto → Light → Dark">${icon(THEME_ICON[s.theme] || THEME_ICON.auto)}<span>Theme: ${THEME_LABEL[s.theme] || 'Auto'}</span></button>
+      <div class="theme-switch" role="radiogroup" aria-label="Theme">${['light', 'dark', 'auto'].map(t => html`<button role="radio" data-theme-set="${t}" aria-checked="${(s.theme || 'auto') === t}">${THEME_LABEL[t]}</button>`)}</div>
       <div class="local-badge" title="All data is stored in this browser only (IndexedDB). Nothing is uploaded.">● Stored locally in this browser</div>
     </div>`);
   $$('[data-mode]').forEach(b => b.onclick = async () => {
-    await store.saveSettings({ [modeKey]: b.dataset.mode });
+    await store.saveSettings({ mode: b.dataset.mode });
     // If a Pro-only page is open and we switch to Simple, fall back to the section home
-    const item = NAV[section].find(i => i.path === currentPath());
+    const item = section && NAV[section].find(i => i.path === currentPath());
     if (item?.pro && b.dataset.mode === 'simple') go(section === 'trading' ? '/trading' : '/networth'); else route();
   });
-  $('[data-theme-toggle]').onclick = async () => { const order = ['auto', 'light', 'dark']; await store.saveSettings({ theme: order[(order.indexOf(s.theme) + 1) % 3] }); applyTheme(); route(); };
+  $$('[data-theme-set]').forEach(b => b.onclick = async () => { await store.saveSettings({ theme: b.dataset.themeSet }); applyTheme(); route(); });
 }
 
 let cleanup = null;
@@ -125,7 +119,8 @@ export async function route() {
     const page = document.createElement('div');
     page.className = 'page';
     main.append(page);
-    cleanup = await view(page, params, { mode: sectionOf(path) === 'networth' ? store.getSettings().networthMode : store.getSettings().tradingMode });
+    cleanup = await view(page, params, { mode: store.getSettings().mode });
+    notices(page);
     main.scrollTop = 0;
     window.scrollTo(0, 0);
     const h = page.querySelector('h1');
@@ -134,6 +129,33 @@ export async function route() {
     console.error(e);
     $('#main').innerHTML = `<div class="page"><h1>Something went wrong</h1><pre class="err">${esc(e.stack || e.message)}</pre></div>`;
   } finally { routing = false; }
+}
+
+// ---------- beta notices: backup reminder + new-version banner ----------
+let updateInfo = null;
+const dismissed = new Set();
+function notices(page) {
+  const s = store.getSettings();
+  const own = c => store.all(c).some(x => !x.demo);
+  const hasData = own('trades') || own('nwAccounts') || own('days');
+  const stale = !s.lastBackupAt || Date.now() - new Date(s.lastBackupAt) > 7 * 864e5;
+  const items = [];
+  if (updateInfo?.available && !dismissed.has('update')) items.push(['update', `Version ${updateInfo.latest} is available.`, 'Load it now']);
+  if (hasData && stale && !dismissed.has('backup')) items.push(['backup', s.lastBackupAt ? `Last backup was ${Math.floor((Date.now() - new Date(s.lastBackupAt)) / 864e5)} days ago. Your data only lives in this browser.` : 'You haven\'t backed up yet. Your data only lives in this browser.', 'Back up now']);
+  for (const [k, text, label] of items) {
+    const d = document.createElement('div');
+    d.className = 'notice';
+    d.innerHTML = `<span>${text}</span><span class="spacer"></span><button class="btn sm primary" data-n="${k}">${label}</button><button class="btn sm ghost" data-x="${k}">Later</button>`;
+    d.querySelector('[data-n]').onclick = async () => {
+      if (k === 'update') return applyUpdate(updateInfo.files);
+      const b = await store.exportBackup();
+      download(`journal-backup-${today()}.json`, JSON.stringify(b));
+      await store.saveSettings({ lastBackupAt: new Date().toISOString() });
+      toast('Backup downloaded'); d.remove();
+    };
+    d.querySelector('[data-x]').onclick = () => { dismissed.add(k); d.remove(); };
+    page.prepend(d);
+  }
 }
 
 // Re-render the current view (used after data changes that the view doesn't handle itself)
@@ -154,5 +176,10 @@ async function boot() {
   $('#menu-btn').onclick = () => document.body.classList.toggle('nav-open');
   $('#sidebar').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   route();
+  // Surface unexpected errors instead of failing silently (beta)
+  window.addEventListener('error', e => toast('Something went wrong: ' + (e.message || 'unknown error'), 'error'));
+  window.addEventListener('unhandledrejection', e => toast('Something went wrong: ' + (e.reason?.message || e.reason || 'unknown error'), 'error'));
+  // Quietly check for a newer deployed version
+  setTimeout(async () => { try { updateInfo = await checkForUpdate(); if (updateInfo.available) route(); } catch {} }, 4000);
 }
 boot();

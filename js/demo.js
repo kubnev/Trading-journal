@@ -2,6 +2,7 @@
 // so it can be removed without touching the user's own entries.
 import * as store from './store.js';
 import { dayKey, localDT, monthKey } from './ui.js';
+import { holdingsTotal } from './networth/prices.js';
 
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const COLS = ['trades', 'tAccounts', 'tTransfers', 'setups', 'days', 'nwAccounts', 'nwSnapshots', 'nwCashflow'];
@@ -126,7 +127,11 @@ export async function loadDemo() {
     brokerage: A('Index funds', 'asset', 'brokerage', { institution: 'Vanguard' }),
     k401: A('401(k)', 'asset', 'retirement', { institution: 'Fidelity' }),
     ira: A('Roth IRA', 'asset', 'retirement', { institution: 'Fidelity' }),
-    crypto: A('Crypto', 'asset', 'crypto', { institution: 'Coinbase' }),
+    crypto: A('Crypto', 'asset', 'crypto', { institution: 'Coinbase', tracksHoldings: true, holdings: [
+      { id: id(), type: 'crypto', symbol: 'BTC', qty: 0.05, price: 98000, cost: 2900, priceSource: 'demo', priceAt: now.toISOString() },
+      { id: id(), type: 'crypto', symbol: 'ETH', qty: 0.8, price: 3400, cost: 2100, priceSource: 'demo', priceAt: now.toISOString() },
+      { id: id(), type: 'crypto', symbol: 'SOL', qty: 6, price: 160, cost: 1150, priceSource: 'demo', priceAt: now.toISOString() },
+    ] }),
     trading: A('Trading account', 'asset', 'trading', { linkedTradingAccountId: acct.id }),
     home: A('Home', 'asset', 'realestate'),
     car: A('Car', 'asset', 'vehicle'),
@@ -162,6 +167,7 @@ export async function loadDemo() {
     for (const [k, a] of Object.entries(nw)) if (k !== 'trading' && !(k === 'auto' && v.auto <= 0 && i < 3)) balances[a.id] = Math.round(v[k] * 100) / 100;
     snaps.push({ id: id(), demo: true, date: dayKey(d), balances });
   }
+  snaps.at(-1).balances[nw.crypto.id] = Math.round(holdingsTotal(nw.crypto) * 100) / 100; // latest = holdings value
   await store.putMany('nwAccounts', Object.values(nw));
   await store.putMany('nwSnapshots', snaps.filter(s => !store.all('nwSnapshots').some(x => x.date === s.date)));
   await store.putMany('nwCashflow', cash.filter(c => !store.get('nwCashflow', c.id)));

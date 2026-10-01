@@ -44,7 +44,7 @@ export default async function home(el) {
     ${!hasAny ? html`<div class="card mt"><div class="row"><div><h2>Want to look around first?</h2><p class="muted small" style="margin:4px 0 0">Load realistic sample data into both sections. It is tagged as demo data and can be removed in one click from Settings.</p></div><span class="spacer"></span><button class="btn primary" data-demo>Load demo data</button></div></div>` : ''}
     <div class="grid g3 mt">
       <div class="card"><h3>Private by design</h3><p class="small muted">Stored in IndexedDB in this browser. No account, no server, no tracking. Other visitors of this site see only their own data.</p></div>
-      <div class="card"><h3>Simple or Pro</h3><p class="small muted">Each section has a Simple / Pro switch in the sidebar. Simple keeps the essentials; Pro unlocks every field, report and chart. Your data is the same either way.</p></div>
+      <div class="card"><h3>Simple or Pro</h3><p class="small muted">One Simple / Pro switch at the top of the sidebar applies everywhere. Simple keeps the essentials; Pro unlocks every field, report and chart. Your data is the same either way.</p></div>
       <div class="card"><h3>Back it up</h3><p class="small muted">Browser storage can be cleared. Export a JSON backup regularly — it restores everything, screenshots included.</p></div>
     </div>`);
   el.querySelector('[data-demo]')?.addEventListener('click', async () => { await loadDemo(); refresh(); });

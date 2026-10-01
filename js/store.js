@@ -21,9 +21,10 @@ export const DEFAULT_SETTINGS = {
   theme: 'auto',                  // 'auto' follows the OS setting
   currency: 'USD',
   locale: undefined,
-  pnlColors: 'greenred',          // or 'blueorange' (colour-vision friendly)
-  tradingMode: 'simple',          // 'simple' | 'pro'
-  networthMode: 'simple',
+  pnlColors: 'greenred',
+  priceApi: { finnhubKey: '', lastUpdate: null },
+  lastBackupAt: null,          // or 'blueorange' (colour-vision friendly)
+  mode: 'simple',                 // 'simple' | 'pro' — one switch for the whole app
   tagLists: {
     tags: ['A+ setup', 'Trend day', 'Range day', 'News', 'Gap', 'High volatility', 'Low volume', 'Earnings'],
     mistakes: ['Entered early', 'Chased entry', 'Moved stop', 'No stop', 'Oversized', 'Cut winner early', 'Held loser', 'Revenge trade', 'FOMO', 'Overtraded', 'Ignored plan', 'Averaged down'],
@@ -78,7 +79,11 @@ export async function init() {
   const tx = db.transaction([...COLLECTIONS, META_STORE], 'readonly');
   await Promise.all(COLLECTIONS.map(async c => { mem[c] = await req(tx.objectStore(c).getAll()); }));
   const s = await req(tx.objectStore(META_STORE).get('settings'));
-  settings = merge(structuredClone(DEFAULT_SETTINGS), s?.value || {});
+  const saved = s?.value || {};
+  // migrate the old per-section switches to the single global one
+  if (!saved.mode && (saved.tradingMode || saved.networthMode)) saved.mode = saved.tradingMode === 'pro' || saved.networthMode === 'pro' ? 'pro' : 'simple';
+  delete saved.tradingMode; delete saved.networthMode;
+  settings = merge(structuredClone(DEFAULT_SETTINGS), saved);
   // Ask the browser not to evict our data under storage pressure.
   try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
 }

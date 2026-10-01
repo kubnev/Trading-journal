@@ -3,6 +3,7 @@ import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, m
 import * as C from '../charts.js';
 import { ASSET_CATS, LIAB_CATS, catLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, fiMetrics, projection, changeDecomposition, debtMetrics } from './calc.js';
 import { loadDemo } from '../demo.js';
+import { updateAllPrices, summaryText, holdingsTotal, holdingValue, syncHoldingsSnapshot, normSymbol } from './prices.js';
 import { go, refresh, query } from '../main.js';
 
 const RANGES = [['all', 'All'], ['1y', '1Y'], ['3y', '3Y'], ['5y', '5Y']];
@@ -12,6 +13,28 @@ const catColor = (id, p) => { const i = ASSET_CATS.findIndex(c => c.id === id); 
 function emptyNW() {
   return html`<div class="empty"><div class="empty-title">Start tracking your net worth</div><p>Add what you own (cash, investments, property) and what you owe (mortgage, loans, cards). Then update balances once a month — that's all it takes to build a history.</p>
     <a class="btn primary" href="#/networth/accounts">+ Add accounts</a><button class="btn" data-demo>Load demo data</button></div>`;
+}
+const hasHoldings = () => store.all('nwAccounts').some(a => a.tracksHoldings && !a.archivedAt && (a.holdings || []).length);
+function ago(iso) {
+  if (!iso) return 'never';
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  if (m < 1440) return `${Math.round(m / 60)} h ago`;
+  return `${Math.round(m / 1440)} d ago`;
+}
+const priceBtn = () => (hasHoldings() ? html`<button class="btn" data-prices title="Fetch live crypto / stock prices for your holdings. Last update: ${ago(store.getSettings().priceApi?.lastUpdate)}">↻ Update prices</button>` : '');
+function wirePrices(el) {
+  el.querySelectorAll('[data-prices]').forEach(b => b.onclick = async () => {
+    const label = b.textContent;
+    b.disabled = true; b.textContent = 'Updating…';
+    try {
+      const r = await updateAllPrices();
+      toast(summaryText(r), r.updated ? 'info' : 'error');
+      if (r.updated) refresh();
+    } catch (e) { toast('Price update failed: ' + e.message, 'error'); }
+    finally { b.disabled = false; b.textContent = label; }
+  });
 }
 const wireDemo = el => el.querySelector('[data-demo]')?.addEventListener('click', async () => { await loadDemo(); refresh(); });
 
@@ -30,7 +53,8 @@ export async function overview(el, _p, { mode }) {
   const accts = store.all('nwAccounts');
   const allSeries = nwSeries();
   el.innerHTML = String(html`<div class="page-head"><div><h1>Net worth</h1><div class="sub">${allSeries.length ? `Last updated ${fmtDate(allSeries.at(-1).date)}` : 'Everything you own minus everything you owe.'}</div></div>
-    <div class="actions">${allSeries.length > 2 ? html`<div class="seg" id="rng">${RANGES.map(([k, l]) => html`<button data-r="${k}" class="${range === k ? 'on' : ''}">${l}</button>`)}</div>` : ''}<a class="btn primary" href="#/networth/update">Update balances</a></div></div><div id="body"></div>`);
+    <div class="actions">${allSeries.length > 2 ? html`<div class="seg" id="rng">${RANGES.map(([k, l]) => html`<button data-r="${k}" class="${range === k ? 'on' : ''}">${l}</button>`)}</div>` : ''}${priceBtn()}<a class="btn primary" href="#/networth/update">Update balances</a></div></div><div id="body"></div>`);
+  wirePrices(el);
   const body = el.querySelector('#body');
   if (!accts.length || !allSeries.length) { body.innerHTML = String(emptyNW()); wireDemo(body); return; }
   el.querySelectorAll('[data-r]').forEach(b => b.onclick = () => { range = b.dataset.r; el.querySelectorAll('[data-r]').forEach(x => x.classList.toggle('on', x === b)); draw(); });
@@ -136,7 +160,7 @@ export async function update(el) {
   const existing = snaps.find(s => s.date === date);
   const prior = pointAt(date);
   el.innerHTML = String(html`<div class="page-head"><div><h1>Update balances</h1><div class="sub">Record what each account is worth on a date. Monthly (e.g. first of the month) is the sweet spot.</div></div>
-      <div class="actions"><label class="row small">Snapshot date <input type="date" id="sd" value="${date}"></label></div></div>
+      <div class="actions">${priceBtn()}<label class="row small">Snapshot date <input type="date" id="sd" value="${date}"></label></div></div>
     ${!accts.length ? html`<div class="empty"><div class="empty-title">No accounts yet</div><p>Add your assets and debts first.</p><a class="btn primary" href="#/networth/accounts">+ Add accounts</a><button class="btn" data-demo>Load demo data</button></div>` : html`
     <form id="uf" class="stack">
       ${existing ? html`<div class="note">Editing the existing snapshot for ${fmtDate(date)}.</div>` : html`<div class="note">Fields are pre-filled with the latest known values — change only what moved.</div>`}
@@ -145,8 +169,8 @@ export async function update(el) {
         if (!list.length) return '';
         return html`<fieldset><legend>${l}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
           const v = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcct[a.id] || '';
-          return html`<label class="field">${a.name} <span class="hint">${catLabel(a.category)}${a.linkedTradingAccountId ? ' · auto from trading journal' : ''}</span>
-            <input type="number" step="any" name="${a.id}" value="${a.linkedTradingAccountId ? Math.round(prior.byAcct[a.id] * 100) / 100 : v}" ${a.linkedTradingAccountId ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
+          return html`<label class="field">${a.name} <span class="hint">${catLabel(a.category)}${a.linkedTradingAccountId ? ' · auto from trading journal' : a.tracksHoldings ? ' · from holdings × prices' : ''}</span>
+            <input type="number" step="any" name="${a.id}" value="${a.linkedTradingAccountId ? Math.round(prior.byAcct[a.id] * 100) / 100 : a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.linkedTradingAccountId || a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
         })}</div></fieldset>`;
       })}
       <div class="calc-preview" id="pv"></div>
@@ -155,6 +179,7 @@ export async function update(el) {
     ${snaps.length ? html`<div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Snapshot history</h2><span class="hint">${snaps.length}</span></div><div class="table-wrap" style="border:0;max-height:360px"><table class="data compact"><thead><tr><th>Date</th><th class="num">Assets</th><th class="num">Liabilities</th><th class="num">Net worth</th><th></th></tr></thead>
       <tbody>${snaps.map(s => { const pt = pointAt(s.date); return html`<tr><td>${fmtDate(s.date)}</td><td class="num">${money(pt.assets)}</td><td class="num">${money(pt.liabilities)}</td><td class="num"><b>${money(pt.net)}</b></td><td><a href="#/networth/update?date=${s.date}">Edit</a></td></tr>`; })}</tbody></table></div></div>` : ''}`);
   wireDemo(el);
+  wirePrices(el);
   el.querySelector('#sd').onchange = e => e.target.value && go('/networth/update?date=' + e.target.value);
   const form = el.querySelector('#uf');
   if (!form) return;
@@ -167,7 +192,7 @@ export async function update(el) {
   form.onsubmit = async e => {
     e.preventDefault();
     const balances = {};
-    for (const a of accts) if (!a.linkedTradingAccountId) { const v = form.elements[a.id].value; if (v !== '') balances[a.id] = a.kind === 'liability' ? Math.abs(+v) : +v; }
+    for (const a of accts) if (!a.linkedTradingAccountId && !a.tracksHoldings) { const v = form.elements[a.id].value; if (v !== '') balances[a.id] = a.kind === 'liability' ? Math.abs(+v) : +v; }
     await store.put('nwSnapshots', { ...(existing || {}), date, balances: { ...(existing?.balances || {}), ...balances } });
     toast('Snapshot saved'); go('/networth');
   };
@@ -188,7 +213,7 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
       <label class="field">Category<select name="category">${catOpts(a.kind)}</select></label>
       <label class="field span2">Name<input name="name" required value="${a.name || ''}" placeholder="e.g. Chase checking, Vanguard 401k, Home"></label>
       <label class="field">Institution<input name="institution" value="${a.institution || ''}"></label>
-      ${!a.id ? html`<label class="field">Current balance<input name="balance" type="number" step="any" placeholder="${a.kind === 'liability' ? 'amount owed' : ''}"></label>` : ''}
+      ${!a.id ? html`<label class="field bal">Current balance<input name="balance" type="number" step="any" placeholder="${a.kind === 'liability' ? 'amount owed' : ''}"></label>` : ''}
       <div class="lia full form-grid" style="padding:0">
         <label class="field">Interest rate (APR %)<input name="rate" type="number" step="any" min="0" value="${a.rate ?? ''}"></label>
         <label class="field">Monthly payment<input name="payment" type="number" step="any" min="0" value="${a.payment ?? ''}"></label>
@@ -196,13 +221,15 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
       <div class="ast full form-grid" style="padding:0">
         <label class="field">Liquid?<select name="liquid"><option value="">Auto (by category)</option><option value="yes" ${a.liquid === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.liquid === false ? raw('selected') : ''}>No</option></select></label>
         <label class="field">Counts toward FI?<select name="investable"><option value="">Auto (by category)</option><option value="yes" ${a.investable === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.investable === false ? raw('selected') : ''}>No</option></select></label>
+        <label class="check full"><input type="checkbox" name="tracksHoldings" ${a.tracksHoldings ? raw('checked') : ''}> Track individual holdings (crypto / stocks) — value = quantity × price, with one-click price updates</label>
         ${tAccts.length ? html`<label class="field span2">Link to trading account <span class="hint">balance follows the journal</span><select name="linkedTradingAccountId"><option value="">— not linked —</option>${tAccts.map(t => html`<option value="${t.id}" ${a.linkedTradingAccountId === t.id ? raw('selected') : ''}>${t.name}</option>`)}</select></label>` : ''}
       </div>
       <label class="field full">Notes<input name="notes" value="${a.notes || ''}"></label>
     </form>`),
     onMount: w => {
       const f = w.querySelector('#nf');
-      const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; };
+      const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; const bal = w.querySelector('.bal'); if (bal) bal.hidden = !li && f.tracksHoldings.checked; };
+      f.tracksHoldings.onchange = sync;
       f.kind.onchange = () => { f.category.innerHTML = String(html`${(f.kind.value === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}">${c.label}</option>`)}`); sync(); };
       sync();
     },
@@ -211,14 +238,67 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
   if (!res || typeof res !== 'object') return null;
   const yn = v => (v === 'yes' ? true : v === 'no' ? false : null);
   const obj = { ...a, kind: res.kind, category: res.category, name: res.name.trim(), institution: res.institution, notes: res.notes,
-    rate: toNum(res.rate), payment: toNum(res.payment), liquid: yn(res.liquid), investable: yn(res.investable), linkedTradingAccountId: res.kind === 'liability' ? '' : res.linkedTradingAccountId || '' };
+    rate: toNum(res.rate), payment: toNum(res.payment), liquid: yn(res.liquid), investable: yn(res.investable), linkedTradingAccountId: res.kind === 'liability' ? '' : res.linkedTradingAccountId || '',
+    tracksHoldings: res.kind !== 'liability' && !!res.tracksHoldings, holdings: a.holdings || [] };
+  if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
   const saved = await store.put('nwAccounts', obj);
-  if (!a.id && res.balance !== '' && res.balance != null) {
+  if (saved.tracksHoldings && !a.tracksHoldings) { await editHoldings(saved); return saved; }
+  if (!a.id && !saved.tracksHoldings && res.balance !== '' && res.balance != null) {
     const d = today();
     const snap = store.all('nwSnapshots').find(s => s.date === d);
     await store.put('nwSnapshots', { ...(snap || { date: d }), balances: { ...(snap?.balances || {}), [saved.id]: Math.abs(+res.balance) } });
   }
   return saved;
+}
+
+async function editHoldings(a) {
+  const cur = store.getSettings().currency;
+  let rows = (a.holdings || []).map(h => ({ ...h }));
+  if (!rows.length) rows.push({ id: store.uid(), type: a.category === 'crypto' ? 'crypto' : 'stock', symbol: '', qty: '', price: '', cost: '' });
+  const rowHtml = h => html`<tr data-id="${h.id}">
+    <td><select data-k="type"><option value="crypto" ${h.type === 'crypto' ? raw('selected') : ''}>Crypto</option><option value="stock" ${h.type === 'stock' ? raw('selected') : ''}>Stock / ETF</option></select></td>
+    <td><input data-k="symbol" value="${h.symbol || ''}" placeholder="BTC, AAPL" style="text-transform:uppercase;width:90px"></td>
+    <td><input data-k="qty" type="number" step="any" min="0" value="${h.qty ?? ''}" style="width:110px"></td>
+    <td><input data-k="price" type="number" step="any" min="0" value="${h.price ?? ''}" placeholder="auto" style="width:110px"></td>
+    <td class="num" data-val>${money(holdingValue(h))}</td>
+    <td><input data-k="cost" type="number" step="any" min="0" value="${h.cost ?? ''}" placeholder="optional" style="width:110px"></td>
+    <td><button type="button" class="icon-btn" data-rm aria-label="Remove holding">✕</button></td></tr>`;
+  const res = await modal({
+    title: `Holdings — ${a.name}`, wide: true,
+    body: String(html`<p class="small muted">Price is per unit in ${cur}. Leave it blank and use <b>Update prices</b> to fetch it — crypto from Binance/Coinbase, stocks from Finnhub (free key in Settings). You can always type a price manually.</p>
+      <div class="table-wrap"><table class="data compact exec-table"><thead><tr><th>Type</th><th>Symbol</th><th>Quantity</th><th>Price (${cur})</th><th class="num">Value</th><th>Total cost basis</th><th></th></tr></thead><tbody id="hrows"></tbody>
+      <tfoot><tr><td colspan="4">Total</td><td class="num" id="htot"></td><td colspan="2"></td></tr></tfoot></table></div>
+      <button type="button" class="btn sm mt" data-addh>+ Add holding</button>`),
+    onMount: w => {
+      const tb = w.querySelector('#hrows');
+      const draw = () => { tb.innerHTML = String(html`${rows.map(rowHtml)}`); tot(); };
+      const tot = () => { w.querySelector('#htot').textContent = money(rows.reduce((s, h) => s + holdingValue(h), 0)); };
+      tb.addEventListener('input', e => { const tr = e.target.closest('tr'); const h = rows.find(x => x.id === tr.dataset.id); h[e.target.dataset.k] = e.target.value; tr.querySelector('[data-val]').textContent = money(holdingValue(h)); tot(); });
+      tb.addEventListener('change', e => { const tr = e.target.closest('tr'); const h = rows.find(x => x.id === tr.dataset.id); h[e.target.dataset.k] = e.target.value; });
+      tb.addEventListener('click', e => { if (e.target.closest('[data-rm]')) { const id = e.target.closest('tr').dataset.id; rows = rows.filter(x => x.id !== id); draw(); } });
+      w.querySelector('[data-addh]').onclick = () => { rows.push({ id: store.uid(), type: rows.at(-1)?.type || 'crypto', symbol: '', qty: '', price: '', cost: '' }); draw(); tb.querySelector('tr:last-child [data-k=symbol]').focus(); };
+      draw();
+    },
+    actions: [{ label: 'Cancel' }, { label: 'Save holdings', kind: 'primary', value: () => true }],
+  });
+  if (res !== true) return false;
+  const holdings = rows.map(h => ({ ...h, symbol: normSymbol(h.symbol), qty: toNum(h.qty), price: toNum(h.price), cost: toNum(h.cost) })).filter(h => h.symbol && h.qty);
+  const fresh = { ...store.get('nwAccounts', a.id), holdings };
+  await store.put('nwAccounts', fresh);
+  await syncHoldingsSnapshot([fresh]);
+  toast(`${holdings.length} holding${holdings.length === 1 ? '' : 's'} saved`);
+  return true;
+}
+
+function holdingsCard(a, pro) {
+  const hs = a.holdings || [];
+  const total = holdingsTotal(a);
+  const last = hs.map(h => h.priceAt).filter(Boolean).sort().at(-1);
+  return html`<div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><div><h2>${a.name} — holdings</h2><div class="small muted">${hs.length} position${hs.length === 1 ? '' : 's'} · prices ${ago(last)}</div></div>
+    <div class="row"><span class="hint">${money(total)}</span><button class="btn sm" data-hold="${a.id}">Edit holdings</button></div></div>
+    ${hs.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Symbol</th><th>Type</th><th class="num">Quantity</th><th class="num">Price</th><th class="num">Value</th><th class="num">Weight</th>${pro ? raw('<th class="num">Cost basis</th><th class="num">Unrealised P&L</th>') : ''}<th>Source</th></tr></thead><tbody>
+      ${[...hs].sort((x, y) => holdingValue(y) - holdingValue(x)).map(h => { const v = holdingValue(h), pl = h.cost ? v - h.cost : null; return html`<tr><td><b>${h.symbol}</b></td><td>${h.type === 'crypto' ? 'Crypto' : 'Stock / ETF'}</td><td class="num">${num(+h.qty, +h.qty % 1 ? 6 : 0)}</td><td class="num">${h.price ? money(+h.price, { decimals: +h.price < 1 ? 6 : 2 }) : html`<span class="muted">—</span>`}</td><td class="num">${money(v)}</td><td class="num">${pct(total ? v / total : null, 1)}</td>${pro ? html`<td class="num">${h.cost ? money(+h.cost) : '—'}</td><td class="num ${pnlClass(pl)}">${pl == null ? '—' : html`${money(pl, { sign: true })} <span class="small">(${pct(pl / h.cost, 1, { sign: true })})</span>`}</td>` : ''}<td class="small muted">${h.priceSource ? `${h.priceSource}, ${ago(h.priceAt)}` : h.price ? 'manual' : 'not priced'}</td></tr>`; })}
+    </tbody></table></div>` : html`<p class="muted small" style="padding:0 16px 16px">No holdings yet.</p>`}</div>`;
 }
 
 export async function accounts(el, _p, { mode }) {
@@ -230,21 +310,25 @@ export async function accounts(el, _p, { mode }) {
     ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}</td><td>${catLabel(a.category)}</td><td>${a.institution || ''}</td>
       ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${money(a.payment)}/mo` : ''].filter(Boolean).join(' · ') : [isLiquid(a) ? 'liquid' : 'illiquid', isInvestable(a) ? 'counts toward FI' : ''].filter(Boolean).join(' · ')}</td>` : ''}
       <td class="num">${money(cur.byAcct[a.id] || 0)}</td>
-      <td style="text-align:right;white-space:nowrap"><button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
+      <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
     </tbody></table></div></div>`;
   const assets = accts.filter(a => a.kind !== 'liability').sort((a, b) => !!a.archivedAt - !!b.archivedAt || a.name.localeCompare(b.name));
   const liabs = accts.filter(a => a.kind === 'liability').sort((a, b) => !!a.archivedAt - !!b.archivedAt || a.name.localeCompare(b.name));
   el.innerHTML = String(html`<div class="page-head"><div><h1>Assets & debts</h1><div class="sub">Everything you own and owe. Closing an account (sold, paid off) keeps its history.</div></div>
-    <div class="actions"><button class="btn" data-new-l>+ Add debt</button><button class="btn primary" data-new>+ Add asset</button></div></div>
+    <div class="actions">${priceBtn()}<button class="btn" data-new-l>+ Add debt</button><button class="btn primary" data-new>+ Add asset</button></div></div>
     ${!accts.length ? html`<div class="empty"><div class="empty-title">No accounts yet</div><p>Typical list: checking, savings, brokerage, retirement, crypto, home, car — and mortgage, car loan, credit cards.</p><button class="btn primary" data-new>+ Add asset</button><button class="btn" data-new-l>+ Add debt</button><button class="btn" data-demo>Load demo data</button></div>` : ''}
-    ${assets.length ? sec('Assets', assets) : ''}${liabs.length ? sec('Liabilities', liabs) : ''}`);
+    ${assets.length ? sec('Assets', assets) : ''}
+    ${assets.filter(a => a.tracksHoldings && !a.archivedAt).map(a => holdingsCard(a, pro))}
+    ${liabs.length ? sec('Liabilities', liabs) : ''}`);
   wireDemo(el);
+  wirePrices(el);
   el.addEventListener('click', async e => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.new !== undefined) { if (await editAccount()) refresh(); }
     else if (b.dataset.newL !== undefined) { if (await editAccount({ kind: 'liability', category: 'mortgage' })) refresh(); }
     else if (b.dataset.edit) { if (await editAccount(store.get('nwAccounts', b.dataset.edit))) refresh(); }
+    else if (b.dataset.hold) { if (await editHoldings(store.get('nwAccounts', b.dataset.hold))) refresh(); }
     else if (b.dataset.arch) {
       const a = store.get('nwAccounts', b.dataset.arch);
       if (a.archivedAt) { await store.put('nwAccounts', { ...a, archivedAt: null }); refresh(); return; }

@@ -1,0 +1,28 @@
+{
+  "version": "0.3.0",
+  "notes": "Shared design language, global Simple/Pro switch, holdings with live price updates, backup reminder, update check.",
+  "files": [
+    "css/app.css",
+    "js/charts.js",
+    "js/demo.js",
+    "js/home.js",
+    "js/main.js",
+    "js/networth/calc.js",
+    "js/networth/prices.js",
+    "js/networth/views.js",
+    "js/settings.js",
+    "js/store.js",
+    "js/trading/calc.js",
+    "js/trading/calendar.js",
+    "js/trading/common.js",
+    "js/trading/csv.js",
+    "js/trading/dashboard.js",
+    "js/trading/journal.js",
+    "js/trading/playbook.js",
+    "js/trading/reports.js",
+    "js/trading/trades.js",
+    "js/trading/views.js",
+    "js/ui.js",
+    "js/version.js"
+  ]
+}

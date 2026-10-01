@@ -97,8 +97,9 @@ export function toast(msg, kind = 'info') {
   t.setAttribute('role', 'status');
   t.textContent = msg;
   host.append(t);
-  setTimeout(() => t.classList.add('out'), 2600);
-  setTimeout(() => t.remove(), 3000);
+  const ms = Math.min(9000, Math.max(2600, msg.length * 55));
+  setTimeout(() => t.classList.add('out'), ms);
+  setTimeout(() => t.remove(), ms + 400);
 }
 
 // ---------- modal ----------

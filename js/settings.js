@@ -3,6 +3,7 @@ import { html, raw, esc, toast, download, readFileText, confirmDlg, modal, formD
 import { loadDemo, removeDemo, hasDemo } from './demo.js';
 import { exportTradesCSV, importTradesCSVDialog } from './trading/csv.js';
 import { refresh } from './main.js';
+import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'BGN', 'CHF', 'JPY', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'RON', 'HUF', 'TRY', 'INR', 'SGD', 'HKD', 'CNY', 'ZAR', 'BRL', 'MXN', 'AED', 'USDT'];
 
@@ -85,6 +86,19 @@ export default async function settingsView(el) {
                       : html`<p class="small muted">Load sample trades, journal days, accounts and net-worth history to explore every chart.</p><button class="btn" data-act="demo-load">Load demo data</button>`}
         </div>
 
+        <form class="card" id="pricecfg">
+          <div class="card-head"><h2>Price data</h2><span class="hint">last update: ${s.priceApi?.lastUpdate ? new Date(s.priceApi.lastUpdate).toLocaleString() : 'never'}</span></div>
+          <p class="small muted">Holdings in net worth can fetch live prices. <b>Crypto</b> works out of the box (Binance, with Coinbase as fallback). <b>Stocks/ETFs</b> need a free API key from <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io</a> (US-listed symbols on the free plan). The key is stored only in this browser and sent only to Finnhub. Prices are converted from USD to ${s.currency} using ECB rates.</p>
+          <div class="row"><input name="finnhubKey" value="${s.priceApi?.finnhubKey || ''}" placeholder="Finnhub API key" autocomplete="off" spellcheck="false" style="flex:1;min-width:200px"><button class="btn primary">Save key</button></div>
+        </form>
+
+        <div class="card">
+          <div class="card-head"><h2>About this beta</h2><span class="hint">v${APP_VERSION}</span></div>
+          <p class="small muted">The site is static — new versions appear when you reload, but your browser may keep old files cached for a few minutes. This checks for a newer version and loads it.</p>
+          <div class="row"><button class="btn" data-act="update">Check for app update</button><span class="small muted" id="upd"></span></div>
+          <details class="mt"><summary class="small" style="cursor:pointer">What's new</summary><dl class="small mt" style="margin:8px 0 0">${CHANGELOG.map(([v, n]) => html`<dt><b>v${v}</b></dt><dd style="margin:0 0 8px">${n}</dd>`)}</dl></details>
+        </div>
+
         <div class="card">
           <div class="card-head"><h2>Danger zone</h2></div>
           <p class="small muted">Delete everything stored by this site in this browser. Export a backup first.</p>
@@ -99,6 +113,11 @@ export default async function settingsView(el) {
     await store.saveSettings({ currency: f.currency, locale: f.locale || undefined, pnlColors: f.pnlColors, theme: f.theme });
     toast('Preferences saved'); refresh();
   };
+  el.querySelector('#pricecfg').onsubmit = async e => {
+    e.preventDefault();
+    await store.saveSettings({ priceApi: { ...(store.getSettings().priceApi || {}), finnhubKey: e.target.finnhubKey.value.trim() } });
+    toast('Price data key saved');
+  };
   el.querySelector('#lists').onsubmit = async e => {
     e.preventDefault();
     const f = formData(e.target);
@@ -110,9 +129,19 @@ export default async function settingsView(el) {
   el.addEventListener('click', async e => {
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
-    if (a === 'export' || a === 'export-lite') {
+    if (a === 'update') {
+      const out = el.querySelector('#upd');
+      out.textContent = 'Checking…';
+      try {
+        const u = await checkForUpdate();
+        if (!u.available) { out.textContent = `You're on the latest version (v${APP_VERSION}).`; return; }
+        out.textContent = `v${u.latest} is available — loading…`;
+        await applyUpdate(u.files);
+      } catch (err) { out.textContent = 'Could not check: ' + err.message; }
+    } else if (a === 'export' || a === 'export-lite') {
       const b = await store.exportBackup({ includeImages: a === 'export' });
       download(`journal-backup-${today()}.json`, JSON.stringify(b));
+      await store.saveSettings({ lastBackupAt: new Date().toISOString() });
       toast('Backup downloaded');
     } else if (a === 'csv-export') {
       exportTradesCSV();

@@ -35,7 +35,7 @@ export function insights(trades, s) {
 export async function dashboard(el, _p, { mode }) {
   const pro = mode === 'pro';
   el.innerHTML = String(html`
-    <div class="page-head"><div><h1>Trading dashboard</h1><div class="sub">${pro ? 'Pro view — full performance picture' : 'Simple view — switch to Pro in the sidebar for deeper analytics'}</div></div>
+    <div class="page-head"><div><h1>Trading dashboard</h1><div class="sub">${pro ? 'Pro view — full performance picture' : 'Simple view — switch to Pro (top of the sidebar) for deeper analytics'}</div></div>
       <div class="actions"><a class="btn" href="#/trading/journal">Today's journal</a><a class="btn primary" href="#/trading/new">+ New trade</a></div></div>
     <div id="fb"></div><div id="body"></div>`);
   const body = el.querySelector('#body');
