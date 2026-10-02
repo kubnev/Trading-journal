@@ -1,10 +1,11 @@
 {
-  "version": "0.4.1",
-  "notes": "Partial take-profits with per-exit P&L; fix: editing a partially closed trade no longer collapses it.",
+  "version": "0.5.0",
+  "notes": "Multi-currency accounts with conversion to the display currency (ECB rates, historical).",
   "files": [
     "css/app.css",
     "js/charts.js",
     "js/demo.js",
+    "js/fx.js",
     "js/help.js",
     "js/home.js",
     "js/journal/views.js",

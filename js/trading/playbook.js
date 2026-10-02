@@ -2,6 +2,7 @@ import * as store from '../store.js';
 import { html, raw, money, pct, rmult, pnlClass, modal, toast, confirmDlg, formData, toNum, fmtDate, stat } from '../ui.js';
 import { computedTrades, stats, startingCapital } from './calc.js';
 import { setFilter } from './common.js';
+import { ccySelect, displayCcy, moneyIn } from '../fx.js';
 import { DEFAULT_FILTER } from './calc.js';
 import { go, refresh } from '../main.js';
 
@@ -74,13 +75,17 @@ async function editAccount(a = {}) {
       <label class="field span2">Name<input name="name" required value="${a.name || ''}" placeholder="e.g. IBKR main"></label>
       <label class="field">Broker<input name="broker" value="${a.broker || ''}"></label>
       <label class="field">Type<select name="type">${ACCOUNT_TYPES.map(([v, l]) => html`<option value="${v}" ${a.type === v ? raw('selected') : ''}>${l}</option>`)}</select></label>
+      <label class="field">Currency${raw(ccySelect('currency', a.currency || displayCcy()))}</label>
       <label class="field">Starting balance<input name="startingBalance" type="number" step="any" value="${a.startingBalance ?? ''}"></label>
       <label class="field">Start date<input name="startDate" type="date" value="${a.startDate || ''}"></label>
     </form>`),
     actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => { const f = w.querySelector('#af'); if (!f.name.value.trim()) { toast('Name is required', 'error'); return false; } return formData(f); } }],
   });
   if (!res || typeof res !== 'object') return null;
-  return store.put('tAccounts', { ...a, ...res, name: res.name.trim(), startingBalance: toNum(res.startingBalance) || 0 });
+  const saved = await store.put('tAccounts', { ...a, ...res, name: res.name.trim(), startingBalance: toNum(res.startingBalance) || 0, currency: res.currency || displayCcy() });
+  // keep linked net-worth accounts in the same currency
+  for (const n of store.all('nwAccounts').filter(n => n.linkedTradingAccountId === saved.id && n.currency !== saved.currency)) await store.put('nwAccounts', { ...n, currency: saved.currency });
+  return saved;
 }
 
 async function addTransfer(accountId) {
@@ -89,7 +94,7 @@ async function addTransfer(accountId) {
     body: String(html`<form class="form-grid" id="xf">
       <label class="field">Type<select name="type"><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal / payout</option></select></label>
       <label class="field">Date<input name="date" type="date" required value="${new Date().toISOString().slice(0, 10)}"></label>
-      <label class="field">Amount<input name="amount" type="number" step="any" min="0" required></label>
+      <label class="field">Amount <span class="hint">${store.get('tAccounts', accountId)?.currency || displayCcy()}</span><input name="amount" type="number" step="any" min="0" required></label>
       <label class="field">Note<input name="note"></label></form>`),
     actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => { const f = w.querySelector('#xf'); if (!(+f.amount.value > 0) || !f.date.value) { toast('Date and amount are required', 'error'); return false; } return formData(f); } }],
   });
@@ -114,13 +119,13 @@ export async function accounts(el) {
           <div class="row"><button class="btn sm" data-xfer="${a.id}">+ Deposit / withdrawal</button><button class="btn sm" data-edit="${a.id}">Edit</button><button class="icon-btn" data-del="${a.id}" aria-label="Delete account">✕</button></div></div>
         <div class="stats">
           ${stat('Equity', money(equity), { sub: 'start + net deposits + closed P&L' })}
-          ${stat('Starting balance', money(+a.startingBalance || 0))}
+          ${stat('Starting balance', moneyIn(+a.startingBalance || 0, a.currency), { sub: a.currency !== displayCcy() ? `account in ${a.currency}` : '' })}
           ${stat('Net deposits', money(cap - (+a.startingBalance || 0), { sign: true }))}
           ${stat('Closed P&L', money(st.net, { sign: true }), { cls: pnlClass(st.net), sub: `${st.n} trades` })}
           ${stat('Return on capital', cap > 0 ? pct(st.net / cap, 1) : '—', { cls: pnlClass(st.net) })}
           ${stat('Max drawdown', money(st.maxDD), { cls: st.maxDD < 0 ? 'neg' : '' })}
         </div>
-        ${xfers.length ? html`<details class="mt"><summary class="small muted" style="cursor:pointer">${xfers.length} deposits / withdrawals</summary><table class="data compact mt"><tbody>${xfers.map(x => html`<tr><td>${fmtDate(x.date)}</td><td>${x.type === 'withdrawal' ? 'Withdrawal' : 'Deposit'}</td><td class="num ${x.type === 'withdrawal' ? 'neg' : 'pos'}">${money((x.type === 'withdrawal' ? -1 : 1) * x.amount, { sign: true })}</td><td class="muted">${x.note || ''}</td><td><button class="icon-btn" data-delx="${x.id}" aria-label="Delete">✕</button></td></tr>`)}</tbody></table></details>` : ''}
+        ${xfers.length ? html`<details class="mt"><summary class="small muted" style="cursor:pointer">${xfers.length} deposits / withdrawals</summary><table class="data compact mt"><tbody>${xfers.map(x => html`<tr><td>${fmtDate(x.date)}</td><td>${x.type === 'withdrawal' ? 'Withdrawal' : 'Deposit'}</td><td class="num ${x.type === 'withdrawal' ? 'neg' : 'pos'}">${moneyIn((x.type === 'withdrawal' ? -1 : 1) * x.amount, a.currency, { sign: true })}</td><td class="muted">${x.note || ''}</td><td><button class="icon-btn" data-delx="${x.id}" aria-label="Delete">✕</button></td></tr>`)}</tbody></table></details>` : ''}
       </div>`;
     })}</div>`);
   el.addEventListener('click', async e => {

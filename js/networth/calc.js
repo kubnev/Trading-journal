@@ -1,6 +1,7 @@
 // Net worth calculations. Pure functions over the store.
 import { all, getSettings } from '../store.js';
 import { accountEquityAt } from '../trading/calc.js';
+import { toDisplay, ccyOf } from '../fx.js';
 import { today, monthKey, parseDay } from '../ui.js';
 
 // liquid: can be turned into cash within days without major loss
@@ -86,17 +87,20 @@ export function liveValue(acct, now = new Date()) {
 export function yieldSummary(now = new Date()) {
   const accts = all('nwAccounts').filter(a => +a.apy > 0 && a.kind !== 'liability' && !a.archivedAt);
   let perYear = 0, value = 0;
-  for (const a of accts) { const v = liveValue(a, now); value += v; perYear += v * (Math.pow(1 + a.apy / 100, 1) - 1); }
+  for (const a of accts) { const v = toDisplay(liveValue(a, now), ccyOf(a)); value += v; perYear += v * (a.apy / 100); }
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const earnedToday = accts.reduce((s, a) => s + (liveValue(a, now) - liveValue(a, midnight)), 0);
+  const earnedToday = accts.reduce((s, a) => s + toDisplay(liveValue(a, now) - liveValue(a, midnight), ccyOf(a)), 0);
   return { accts, value, perYear, perDay: perYear / 365, perMonth: perYear / 12, perSecond: perYear / 365 / 86400, earnedToday, blendedApy: value ? perYear / value : null };
 }
 
 export function pointAt(date, snaps = sortedSnaps()) {
   const accts = all('nwAccounts');
-  const p = { date, assets: 0, liabilities: 0, liquid: 0, investable: 0, shortDebt: 0, byCat: {}, byAcct: {}, byCustody: {}, byPurpose: {}, byTier: {} };
+  // byAcctNative: in each account's own currency; everything else in the display currency
+  const p = { date, assets: 0, liabilities: 0, liquid: 0, investable: 0, shortDebt: 0, byCat: {}, byAcct: {}, byAcctNative: {}, byCustody: {}, byPurpose: {}, byTier: {} };
   for (const a of accts) {
-    const v = valueAt(a, date, snaps);
+    const native = valueAt(a, date, snaps);
+    const v = toDisplay(native, ccyOf(a), date);
+    p.byAcctNative[a.id] = native;
     p.byAcct[a.id] = v;
     p.byCat[a.category] = (p.byCat[a.category] || 0) + v;
     if (a.kind === 'liability') { p.liabilities += v; if (catInfo(a.category).shortTerm) p.shortDebt += v; }
@@ -123,7 +127,11 @@ export function nwSeries() {
 
 // ---------- cash flow ----------
 export function cashflowMonths() {
-  return [...all('nwCashflow')].sort((a, b) => a.id.localeCompare(b.id)).map(c => ({ ...c, income: +c.income || 0, expenses: +c.expenses || 0, savings: (+c.income || 0) - (+c.expenses || 0), rate: +c.income ? ((+c.income || 0) - (+c.expenses || 0)) / +c.income : null }));
+  return [...all('nwCashflow')].sort((a, b) => a.id.localeCompare(b.id)).map(c => {
+    const cur = ccyOf(c), d = c.id + '-15';
+    const income = toDisplay(+c.income || 0, cur, d), expenses = toDisplay(+c.expenses || 0, cur, d);
+    return { ...c, nativeIncome: +c.income || 0, nativeExpenses: +c.expenses || 0, income, expenses, savings: income - expenses, rate: income ? (income - expenses) / income : null };
+  });
 }
 
 export function trailing(months, n = 12) {
@@ -136,8 +144,9 @@ export function trailing(months, n = 12) {
 export function planInputs() {
   const pl = getSettings().plan;
   const t = trailing(cashflowMonths());
-  const annualExpenses = +pl.annualExpenses || (t.avgExpenses ? t.avgExpenses * 12 : 0);
-  const monthlyContribution = +pl.monthlyContribution || (t.avgSavings > 0 ? t.avgSavings : 0);
+  // plan amounts are stored in the currency they were typed in
+  const annualExpenses = +pl.annualExpenses ? toDisplay(+pl.annualExpenses, pl.currency || 'USD') : (t.avgExpenses ? t.avgExpenses * 12 : 0);
+  const monthlyContribution = +pl.monthlyContribution ? toDisplay(+pl.monthlyContribution, pl.currency || 'USD') : (t.avgSavings > 0 ? t.avgSavings : 0);
   const realReturn = (1 + (+pl.expectedReturn || 0) / 100) / (1 + (+pl.inflation || 0) / 100) - 1;
   return { ...pl, annualExpenses, monthlyContribution, realReturn, derivedExpenses: !+pl.annualExpenses, derivedContribution: !+pl.monthlyContribution, trailing: t };
 }
@@ -193,7 +202,7 @@ export function debtMetrics(point) {
   const total = debts.reduce((s, a) => s + (point.byAcct[a.id] || 0), 0);
   const withRate = debts.filter(a => +a.rate > 0);
   const wRate = total ? withRate.reduce((s, a) => s + (point.byAcct[a.id] || 0) * +a.rate, 0) / total : null;
-  const minPay = debts.reduce((s, a) => s + (+a.payment || 0), 0);
+  const minPay = debts.reduce((s, a) => s + toDisplay(+a.payment || 0, ccyOf(a)), 0);
   return { total, wRate, minPay, debts };
 }
 

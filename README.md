@@ -26,6 +26,9 @@ One global **Simple / Pro** switch (top of the sidebar) applies to both sections
 
 See [RESEARCH.md](RESEARCH.md) for the metrics, charts and design rationale.
 
+## Currencies
+Each account (net worth and trading) and each cash-flow month has its own currency. Values are stored as entered and converted into the **display currency** (Settings) for totals, charts and dashboards. Conversion uses ECB reference rates via Frankfurter, with Coinbase as fallback. Past snapshots use the rate of their date, so FX moves show up in your history. Rates are cached locally, and USDT is treated as USD.
+
 ## Live prices for holdings
 Net-worth accounts can track individual holdings (quantity × price). **Update prices** fetches prices directly from the browser:
 - **Crypto:** Binance public API, with Coinbase as fallback. No key needed. Binance is unavailable from US IPs, so US users get Coinbase.

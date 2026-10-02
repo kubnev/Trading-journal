@@ -23,8 +23,8 @@ export async function loadDemo() {
   const sets = store.getSettings().tagLists;
 
   // ---------------- trading (swing) ----------------
-  const acct = { id: id(), demo: true, name: 'Demo — IBKR swing', broker: 'Interactive Brokers', type: 'margin', startingBalance: 40000, startDate: dayKey(new Date(now.getFullYear() - 1, now.getMonth(), 1)) };
-  const cex = { id: id(), demo: true, name: 'Demo — Bybit', broker: 'Bybit', type: 'crypto', startingBalance: 12000 };
+  const acct = { id: id(), demo: true, currency: 'USD', name: 'Demo — IBKR swing', broker: 'Interactive Brokers', type: 'margin', startingBalance: 40000, startDate: dayKey(new Date(now.getFullYear() - 1, now.getMonth(), 1)) };
+  const cex = { id: id(), demo: true, currency: 'USDT', name: 'Demo — Bybit', broker: 'Bybit', type: 'crypto', startingBalance: 12000 };
   const xfers = [{ id: id(), demo: true, accountId: acct.id, type: 'deposit', date: dayKey(new Date(now.getFullYear(), now.getMonth() - 6, 3)), amount: 10000, note: 'Added capital' }];
   const S = (name, tf, winP, winR, lossR, hold, extra) => ({ id: id(), demo: true, active: true, name, timeframe: tf, winP, winR, lossR, hold, ...extra });
   const setups = [
@@ -140,26 +140,26 @@ export async function loadDemo() {
   // ---------------- net worth ----------------
   const A = (name, kind, category, extra = {}) => ({ id: id(), demo: true, name, kind, category, ...extra });
   const nw = {
-    checking: A('Checking', 'asset', 'cash', { institution: 'Revolut', custody: 'bank', purpose: 'Spending' }),
-    hysa: A('High-yield savings', 'asset', 'savings', { institution: 'Trade Republic', custody: 'bank', purpose: 'Emergency fund', apy: 3.75 }),
-    mmf: A('Money-market fund', 'asset', 'savings', { institution: 'IBKR', custody: 'broker', purpose: 'Short-term goals', apy: 4.6, liquid: true }),
-    etf: A('ETF portfolio', 'asset', 'brokerage', { institution: 'IBKR', custody: 'broker', purpose: 'Long-term investing' }),
-    pension: A('Pension fund', 'asset', 'retirement', { institution: 'Pension', custody: 'broker', purpose: 'Retirement' }),
-    cexAcc: A('Binance spot', 'asset', 'crypto', { institution: 'Binance', custody: 'cex', purpose: 'Crypto', tracksHoldings: true, holdings: [
+    checking: A('Checking', 'asset', 'cash', { currency: 'EUR', institution: 'Revolut', custody: 'bank', purpose: 'Spending' }),
+    hysa: A('High-yield savings', 'asset', 'savings', { currency: 'EUR', institution: 'Trade Republic', custody: 'bank', purpose: 'Emergency fund', apy: 3.75 }),
+    mmf: A('Money-market fund', 'asset', 'savings', { currency: 'USD', institution: 'IBKR', custody: 'broker', purpose: 'Short-term goals', apy: 4.6, liquid: true }),
+    etf: A('ETF portfolio', 'asset', 'brokerage', { currency: 'USD', institution: 'IBKR', custody: 'broker', purpose: 'Long-term investing' }),
+    pension: A('Pension fund', 'asset', 'retirement', { currency: 'EUR', institution: 'Pension', custody: 'broker', purpose: 'Retirement' }),
+    cexAcc: A('Binance spot', 'asset', 'crypto', { currency: 'USD', institution: 'Binance', custody: 'cex', purpose: 'Crypto', tracksHoldings: true, holdings: [
       { id: id(), type: 'crypto', symbol: 'SOL', qty: 18, price: 150, cost: 2100, priceSource: 'demo', priceAt: now.toISOString() },
       { id: id(), type: 'crypto', symbol: 'LINK', qty: 140, price: 14, cost: 1650, priceSource: 'demo', priceAt: now.toISOString() },
       { id: id(), type: 'crypto', symbol: 'USDC', qty: 2500, price: 1, cost: 2500, priceSource: 'demo', priceAt: now.toISOString() },
     ] }),
-    cold: A('Cold wallet (BTC)', 'asset', 'crypto', { institution: 'Hardware wallet', custody: 'self', purpose: 'Long-term investing', tracksHoldings: true, holdings: [
+    cold: A('Cold wallet (BTC)', 'asset', 'crypto', { currency: 'USD', institution: 'Hardware wallet', custody: 'self', purpose: 'Long-term investing', tracksHoldings: true, holdings: [
       { id: id(), type: 'crypto', symbol: 'BTC', qty: 0.12, price: 68000, cost: 4200, priceSource: 'demo', priceAt: now.toISOString() },
     ] }),
-    defi: A('Staked ETH (Lido)', 'asset', 'crypto', { institution: 'Lido', custody: 'dex', purpose: 'Crypto', apy: 3.1 }),
-    trading: A('Swing trading capital', 'asset', 'trading', { institution: 'IBKR', custody: 'broker', purpose: 'Trading capital', linkedTradingAccountId: acct.id }),
-    bybit: A('Bybit trading capital', 'asset', 'trading', { institution: 'Bybit', custody: 'cex', purpose: 'Trading capital', linkedTradingAccountId: cex.id }),
-    home: A('Apartment', 'asset', 'realestate', { purpose: 'Home & property' }),
-    car: A('Car', 'asset', 'vehicle'),
-    mortgage: A('Mortgage', 'liability', 'mortgage', { institution: 'Bank', rate: 3.4, payment: 820 }),
-    cc: A('Credit card', 'liability', 'credit', { institution: 'Amex', rate: 21 }),
+    defi: A('Staked ETH (Lido)', 'asset', 'crypto', { currency: 'USD', institution: 'Lido', custody: 'dex', purpose: 'Crypto', apy: 3.1 }),
+    trading: A('Swing trading capital', 'asset', 'trading', { currency: 'USD', institution: 'IBKR', custody: 'broker', purpose: 'Trading capital', linkedTradingAccountId: acct.id }),
+    bybit: A('Bybit trading capital', 'asset', 'trading', { currency: 'USDT', institution: 'Bybit', custody: 'cex', purpose: 'Trading capital', linkedTradingAccountId: cex.id }),
+    home: A('Apartment', 'asset', 'realestate', { currency: 'EUR', purpose: 'Home & property' }),
+    car: A('Car', 'asset', 'vehicle', { currency: 'EUR' }),
+    mortgage: A('Mortgage', 'liability', 'mortgage', { currency: 'EUR', institution: 'Bank', rate: 3.4, payment: 820 }),
+    cc: A('Credit card', 'liability', 'credit', { currency: 'EUR', institution: 'Amex', rate: 21 }),
   };
   const M = 30;
   const snaps = [], cash = [];
@@ -182,7 +182,7 @@ export async function loadDemo() {
       v.car *= 0.99;
       v.mortgage = v.mortgage * (1 + 0.034 / 12) - 820 * 0.6;
       v.cc = Math.max(200, 900 + normal() * 400);
-      cash.push({ id: mk, demo: true, income, expenses, note: d.getMonth() === 11 ? 'Year-end bonus' : d.getMonth() === 7 ? 'Holiday' : '' });
+      cash.push({ id: mk, demo: true, currency: 'EUR', income, expenses, note: d.getMonth() === 11 ? 'Year-end bonus' : d.getMonth() === 7 ? 'Holiday' : '' });
     }
     const balances = {};
     for (const [k, a] of Object.entries(nw)) if (k in v) balances[a.id] = Math.round(v[k] * 100) / 100;

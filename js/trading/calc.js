@@ -1,6 +1,7 @@
 // Pure trading calculations. No DOM here.
 import { all } from '../store.js';
-import { dayKey, monthKey } from '../ui.js';
+import { dayKey, monthKey, today } from '../ui.js';
+import { toDisplay, displayCcy } from '../fx.js';
 
 export const ASSET_CLASSES = [
   { id: 'stock', label: 'Stock / ETF', mult: 1 },
@@ -126,7 +127,21 @@ export function filterTrades(trades, f = DEFAULT_FILTER) {
     (!sym || (t.symbol || '').toUpperCase().includes(sym)));
 }
 
-export const computedTrades = () => all('trades').map(computeTrade);
+// A trade's money is in its trading account's currency; aggregates convert to the display currency.
+export const tradeCcy = t => all('tAccounts').find(a => a.id === t.accountId)?.currency || displayCcy();
+const MONEY = ['gross', 'net', 'fees', 'risk', 'unreal', 'openRisk', 'lockedIn', 'exposure', 'notional', 'realizedNet', 'maeUsd', 'mfeUsd', 'funding'];
+export function toDisplayTrade(c) {
+  const ccy = tradeCcy(c);
+  if (ccy === displayCcy()) return { ...c, ccy, fxFactor: 1 };
+  const date = c.closed ? (c.closeDate || '').slice(0, 10) : today();
+  const f = toDisplay(1, ccy, date);
+  const out = { ...c, ccy, fxFactor: f };
+  for (const k of MONEY) if (out[k] != null) out[k] = out[k] * f;
+  out.legs = (c.legs || []).map(l => ({ ...l, pnl: l.pnl * toDisplay(1, ccy, (l.datetime || '').slice(0, 10)) }));
+  return out;
+}
+export const computeTradeDisplay = t => toDisplayTrade(computeTrade(t));
+export const computedTrades = () => all('trades').map(computeTradeDisplay);
 export const closedSorted = ts => ts.filter(t => t.closed).sort((a, b) => (a.closeDate || '').localeCompare(b.closeDate || ''));
 
 // ---------- statistics ----------
@@ -160,7 +175,9 @@ export function drawdownSeries(values) {
 
 export function startingCapital(accountId) {
   const accts = all('tAccounts').filter(a => !accountId || a.id === accountId);
-  return sum(accts.map(a => +a.startingBalance || 0)) + sum(all('tTransfers').filter(x => !accountId || x.accountId === accountId).map(x => (x.type === 'withdrawal' ? -1 : 1) * (+x.amount || 0)));
+  const cur = id => all('tAccounts').find(a => a.id === id)?.currency || displayCcy();
+  return sum(accts.map(a => toDisplay(+a.startingBalance || 0, a.currency || displayCcy(), a.startDate || undefined)))
+    + sum(all('tTransfers').filter(x => !accountId || x.accountId === accountId).map(x => toDisplay((x.type === 'withdrawal' ? -1 : 1) * (+x.amount || 0), cur(x.accountId), x.date)));
 }
 
 export function stats(trades, { capital = 0 } = {}) {
@@ -317,6 +334,7 @@ export function accountEquityAt(accountId, day) {
   if (!a) return null;
   let v = +a.startingBalance || 0;
   for (const x of all('tTransfers')) if (x.accountId === accountId && x.date <= day) v += (x.type === 'withdrawal' ? -1 : 1) * (+x.amount || 0);
-  for (const t of computedTrades()) if (t.accountId === accountId && t.closed && t.day <= day) v += t.net;
+  // native (account currency) — the linked net-worth account converts it
+  for (const t of all('trades').map(computeTrade)) if (t.accountId === accountId && t.closed && t.day <= day) v += t.net;
   return v;
 }

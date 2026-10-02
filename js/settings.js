@@ -5,7 +5,7 @@ import { exportTradesCSV, importTradesCSVDialog } from './trading/csv.js';
 import { refresh } from './main.js';
 import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'BGN', 'CHF', 'JPY', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'RON', 'HUF', 'TRY', 'INR', 'SGD', 'HKD', 'CNY', 'ZAR', 'BRL', 'MXN', 'AED', 'USDT'];
+import { CURRENCIES, refreshRates, currenciesInUse, otherCurrencies, ratesAt, rate, usingFallback } from './fx.js';
 
 export default async function settingsView(el) {
   const s = store.getSettings();
@@ -20,7 +20,7 @@ export default async function settingsView(el) {
         <form class="card" id="prefs">
           <div class="card-head"><h2>Preferences</h2></div>
           <div class="form-grid">
-            <label class="field">Currency
+            <label class="field">Display currency <span class="hint">totals & charts are converted to this</span>
               <select name="currency">${CURRENCIES.map(c => html`<option ${c === s.currency ? raw('selected') : ''}>${c}</option>`)}</select>
             </label>
             <label class="field">Number & date format
@@ -38,7 +38,7 @@ export default async function settingsView(el) {
               <select name="theme"><option value="auto" ${s.theme === 'auto' ? raw('selected') : ''}>Auto (match system)</option><option value="dark" ${s.theme === 'dark' ? raw('selected') : ''}>Dark</option><option value="light" ${s.theme === 'light' ? raw('selected') : ''}>Light</option></select>
             </label>
           </div>
-          <p class="small muted mt">Amounts are tracked in one base currency. If you hold accounts in other currencies, enter their converted value.</p>
+          <p class="small muted mt">Each account keeps its own currency (set it when you add the account). Everything is converted into the display currency using ECB reference rates — historical snapshots use the rate on that date.</p>
           <div class="row mt"><span class="spacer"></span><button class="btn primary">Save preferences</button></div>
         </form>
 
@@ -88,9 +88,15 @@ export default async function settingsView(el) {
                       : html`<p class="small muted">Load sample trades, journal days, accounts and net-worth history to explore every chart.</p><button class="btn" data-act="demo-load">Load demo data</button>`}
         </div>
 
+        <div class="card">
+          <div class="card-head"><h2>Exchange rates</h2><span class="hint">${ratesAt() ? 'updated ' + new Date(ratesAt()).toLocaleString() : usingFallback() && currenciesInUse().length ? 'approximate — not loaded yet' : 'not needed yet'}</span></div>
+          ${otherCurrencies().length ? html`<table class="data compact"><tbody>${otherCurrencies().map(c => html`<tr><td>1 ${s.currency}</td><td class="num">${(rate(c) / rate(s.currency)).toFixed(4)} ${c}</td><td class="num muted">1 ${c} = ${(rate(s.currency) / rate(c)).toFixed(4)} ${s.currency}</td></tr>`)}</tbody></table>` : html`<p class="small muted">All your accounts use ${s.currency}. Add an account in another currency and rates load automatically.</p>`}
+          <div class="row mt"><button class="btn" data-act="fx">Refresh rates</button><span class="small muted">Source: European Central Bank (via Frankfurter), Coinbase as fallback.</span></div>
+        </div>
+
         <form class="card" id="pricecfg">
           <div class="card-head"><h2>Price data</h2><span class="hint">last update: ${s.priceApi?.lastUpdate ? new Date(s.priceApi.lastUpdate).toLocaleString() : 'never'}</span></div>
-          <p class="small muted">Holdings in net worth can fetch live prices. <b>Crypto</b> works out of the box (Binance, with Coinbase as fallback). <b>Stocks/ETFs</b> need a free API key from <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io</a> (US-listed symbols on the free plan). The key is stored only in this browser and sent only to Finnhub. Prices are converted from USD to ${s.currency} using ECB rates.</p>
+          <p class="small muted">Holdings in net worth can fetch live prices. <b>Crypto</b> works out of the box (Binance, with Coinbase as fallback). <b>Stocks/ETFs</b> need a free API key from <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io</a> (US-listed symbols on the free plan). The key is stored only in this browser and sent only to Finnhub. Prices are converted from USD into each account's currency using ECB rates.</p>
           <div class="row"><input name="finnhubKey" value="${s.priceApi?.finnhubKey || ''}" placeholder="Finnhub API key" autocomplete="off" spellcheck="false" style="flex:1;min-width:200px"><button class="btn primary">Save key</button></div>
         </form>
 
@@ -113,6 +119,7 @@ export default async function settingsView(el) {
     e.preventDefault();
     const f = formData(e.target);
     await store.saveSettings({ currency: f.currency, locale: f.locale || undefined, pnlColors: f.pnlColors, theme: f.theme });
+    await refreshRates().catch(() => {});
     toast('Preferences saved'); refresh();
   };
   el.querySelector('#pricecfg').onsubmit = async e => {
@@ -131,6 +138,11 @@ export default async function settingsView(el) {
   el.addEventListener('click', async e => {
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
+    if (a === 'fx') {
+      const r = await refreshRates({ force: true });
+      toast(r.ok ? 'Exchange rates updated' : 'Could not load rates: ' + (r.errors || []).join(' '), r.ok ? 'info' : 'error');
+      refresh(); return;
+    }
     if (a === 'update') {
       const out = el.querySelector('#upd');
       out.textContent = 'Checking…';

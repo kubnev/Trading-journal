@@ -95,20 +95,26 @@ export async function updateAllPrices() {
   const stockSyms = holdings.filter(h => h.type === 'stock').map(h => h.symbol);
   const [c, k] = await Promise.all([cryptoPricesUSD(cryptoSyms), stockPricesUSD(stockSyms, s.priceApi?.finnhubKey)]);
   const errors = [...c.errors, ...k.errors];
-  let fx = 1;
-  try { fx = await usdTo(s.currency); } catch (e) { errors.push(e.message); fx = null; }
+  // prices come in USD; each account is valued in its own currency
+  const fxBy = {};
+  for (const cur of new Set(accts.map(a => a.currency || s.currency || 'USD'))) {
+    try { fxBy[cur] = await usdTo(cur); } catch (e) { errors.push(e.message); }
+  }
   const now = new Date().toISOString();
   let updated = 0;
   const sources = {};
+  const fx = Object.keys(fxBy).length ? 1 : null;
   if (fx != null) {
     for (const a of accts) {
+      const rate = fxBy[a.currency || s.currency || 'USD'];
+      if (rate == null) continue;
       let changed = false;
       const hs = a.holdings.map(h => {
         const p = (h.type === 'crypto' ? c.prices : k.prices)[normSymbol(h.symbol)];
         if (!p) return h;
         changed = true; updated++;
         sources[p.source] = (sources[p.source] || 0) + 1;
-        return { ...h, price: +(p.usd * fx).toPrecision(10), priceUSD: p.usd, priceAt: now, priceSource: p.source };
+        return { ...h, price: +(p.usd * rate).toPrecision(10), priceUSD: p.usd, priceAt: now, priceSource: p.source };
       });
       if (changed) await store.put('nwAccounts', { ...a, holdings: hs });
     }

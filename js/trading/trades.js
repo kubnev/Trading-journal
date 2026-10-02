@@ -1,7 +1,7 @@
 // Swing-trade log, trade page (thesis, plan, executions, timeline, review) and the trade form.
 import * as store from '../store.js';
 import { html, raw, money, pct, num, rmult, price, pnlClass, fmtDate, formData, toNum, toast, confirmDlg, chipPicker, wireChipAdd, stat, today } from '../ui.js';
-import { computeTrade, ASSET_CLASSES, FUTURES, GRADES, assetLabel, TIMEFRAMES, REGIMES, EXIT_REASONS, CATALYSTS, startingCapital, computedTrades } from './calc.js';
+import { computeTrade, computeTradeDisplay, tradeCcy, ASSET_CLASSES, FUTURES, GRADES, assetLabel, TIMEFRAMES, REGIMES, EXIT_REASONS, CATALYSTS, startingCapital, computedTrades } from './calc.js';
 import { filterBar, filtered, tradeRow, tradeHead, wireRowLinks, emptyTrades, setupName, accountName, sidePill, fmtDays } from './common.js';
 import { updatePositionModal, closePositionModal } from './positions.js';
 import { loadDemo } from '../demo.js';
@@ -53,7 +53,7 @@ export async function tradeList(el, _p, { mode }) {
 export async function tradeDetail(el, [id]) {
   const raw0 = store.get('trades', id);
   if (!raw0) { el.innerHTML = '<h1>Trade not found</h1><p><a href="#/trading/trades">Back to the trade log</a></p>'; return; }
-  const t = computeTrade(raw0);
+  const t = computeTradeDisplay(raw0);
   const setup = t.setupId ? store.get('setups', t.setupId) : null;
   const ex = [...(t.executions || [])].sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
   const openAct = t.side === 'short' ? 'sell' : 'buy';
@@ -199,7 +199,7 @@ export async function tradeEdit(el, [id], { mode }) {
     <div class="page-head"><div><h1>${existing ? `Edit ${t.symbol}` : 'New swing trade'}</h1><div class="sub">${pro ? 'Pro form — everything you might want to review later. Leave blank what you don\'t track.' : 'Simple form — the essentials. Switch to Pro for catalyst, regime, scale-ins/outs, MAE/MFE and review fields.'}</div></div></div>
     <form id="tf" class="stack" autocomplete="off">
       <fieldset><legend>Instrument</legend><div class="form-grid">
-        <label class="field">Account<select name="accountId">${accts.map(a => html`<option value="${a.id}" ${a.id === t.accountId ? raw('selected') : ''}>${a.name}</option>`)}${!accts.length ? html`<option value="">Main account (will be created)</option>` : ''}</select></label>
+        <label class="field">Account <span class="hint" id="acc-ccy"></span><select name="accountId">${accts.map(a => html`<option value="${a.id}" ${a.id === t.accountId ? raw('selected') : ''}>${a.name}</option>`)}${!accts.length ? html`<option value="">Main account (will be created)</option>` : ''}</select></label>
         <label class="field">Symbol<input name="symbol" required value="${t.symbol}" placeholder="AAPL, BTC, ETHUSDT…" style="text-transform:uppercase"></label>
         <label class="field">Asset class<select name="assetClass">${ASSET_CLASSES.map(a => html`<option value="${a.id}" ${a.id === t.assetClass ? raw('selected') : ''}>${a.label}</option>`)}</select></label>
         <label class="field">Direction<div class="seg" role="radiogroup"><button type="button" data-side="long" class="${t.side !== 'short' ? 'on' : ''}">Long</button><button type="button" data-side="short" class="${t.side === 'short' ? 'on' : ''}">Short</button></div><input type="hidden" name="side" value="${t.side || 'long'}"></label>
@@ -263,6 +263,9 @@ export async function tradeEdit(el, [id], { mode }) {
     </form>`);
 
   const form = el.querySelector('#tf');
+  const accCcy = () => { const h = el.querySelector('#acc-ccy'); if (h) h.textContent = `prices & P&L in ${tradeCcy({ accountId: form.accountId.value })}`; };
+  form.accountId.addEventListener('change', () => { accCcy(); update(); });
+  setTimeout(accCcy);
   const tbody = el.querySelector('.exec-table tbody');
   wireChipAdd(form);
   form.querySelectorAll('[data-side]').forEach(b => b.onclick = () => {
@@ -339,7 +342,7 @@ export async function tradeEdit(el, [id], { mode }) {
     };
   }
   function update() {
-    const c = computeTrade(draft());
+    const c = computeTradeDisplay(draft());
     el.querySelector('#preview').innerHTML = String(html`
       <span>${c.closed ? 'Net P&L' : 'Status'} <b class="${pnlClass(c.net)}">${c.closed ? money(c.net, { sign: true }) : c.entryQty ? 'open' : '—'}</b></span>
       <span>Risk <b>${money(c.risk)}</b>${c.risk && capital > 0 ? html` <span class="muted">(${pct(c.risk / capital, 2)} of capital)</span>` : ''}</span>

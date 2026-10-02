@@ -18,6 +18,7 @@ const GUIDE = [
     <li><b>Purpose</b> — e.g. Emergency fund, Trading capital, Long-term. Shows as buckets in Analytics.</li>
     <li><b>Fixed yield (APY)</b> — savings accounts, money-market funds, staking. The balance then grows every day automatically; you only re-enter it when it really changes.</li>
     <li><b>Track individual holdings</b> — enter coins/stocks and quantities; <b>↻ Update prices</b> fetches live prices (crypto: Binance → Coinbase; stocks: Finnhub with a free key in Settings).</li>
+    <li><b>Currency</b> — each account keeps its own currency (EUR, USD, GBP…). Totals and charts are converted into the display currency from Settings using ECB rates; past snapshots use the rate of that date.</li>
     <li><b>Close</b> an account when sold or paid off — its history stays.</li></ul>` },
   { id: 'update', title: 'Update balances', match: p => p === '/networth/update', body: `
     <p>Record what each account is worth on a date. Fields are pre-filled with the latest values (including yield growth), so you only change what moved. Holdings and linked trading accounts fill themselves.</p>` },

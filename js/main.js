@@ -9,6 +9,7 @@ import * as T from './trading/views.js';
 import * as N from './networth/views.js';
 import * as J from './journal/views.js';
 import { openHelp, maybeStartTour } from './help.js';
+import { migrateCurrencies, refreshRates, currenciesInUse, usingFallback } from './fx.js';
 
 // Grouped navigation. `pro: true` items only appear in Pro mode.
 const I = {
@@ -167,6 +168,7 @@ function notices(page) {
   const hasData = own('trades') || own('nwAccounts') || own('days');
   const stale = !s.lastBackupAt || Date.now() - new Date(s.lastBackupAt) > 7 * 864e5;
   const items = [];
+  if (currenciesInUse().length && usingFallback() && !dismissed.has('fx')) items.push(['fx', 'Exchange rates haven\'t loaded yet — other currencies are converted with approximate rates.', 'Retry']);
   if (updateInfo?.available && !dismissed.has('update')) items.push(['update', `Version ${updateInfo.latest} is available.`, 'Load it now']);
   if (hasData && stale && !dismissed.has('backup')) items.push(['backup', s.lastBackupAt ? `Last backup was ${Math.floor((Date.now() - new Date(s.lastBackupAt)) / 864e5)} days ago. Your data only lives in this browser.` : 'You haven\'t backed up yet. Your data only lives in this browser.', 'Back up now']);
   for (const [k, text, label] of items) {
@@ -175,6 +177,7 @@ function notices(page) {
     d.innerHTML = `<span>${text}</span><span class="spacer"></span><button class="btn sm primary" data-n="${k}">${label}</button><button class="btn sm ghost" data-x="${k}">Later</button>`;
     d.querySelector('[data-n]').onclick = async () => {
       if (k === 'update') return applyUpdate(updateInfo.files);
+      if (k === 'fx') { const r = await refreshRates({ force: true }); toast(r.ok ? 'Exchange rates loaded' : 'Still offline: ' + (r.errors || []).join(' '), r.ok ? 'info' : 'error'); return route(); }
       const b = await store.exportBackup();
       download(`journal-backup-${today()}.json`, JSON.stringify(b));
       await store.saveSettings({ lastBackupAt: new Date().toISOString() });
@@ -206,6 +209,8 @@ async function boot() {
   $('#sidebar').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   route();
   maybeStartTour();
+  // exchange rates for multi-currency data (cached; refreshed at most twice a day)
+  refreshRates().then(r => { if (r && !r.skipped) route(); }).catch(() => {});
   // Surface unexpected errors instead of failing silently (beta)
   window.addEventListener('error', e => toast('Something went wrong: ' + (e.message || 'unknown error'), 'error'));
   window.addEventListener('unhandledrejection', e => toast('Something went wrong: ' + (e.reason?.message || e.reason || 'unknown error'), 'error'));

@@ -2,7 +2,8 @@
 import * as store from '../store.js';
 import { html, raw, money, pct, num, rmult, price, pnlClass, fmtDate, modal, toast, toNum, stat, today } from '../ui.js';
 import * as C from '../charts.js';
-import { computedTrades, openBook, startingCapital, EXIT_REASONS, assetLabel } from './calc.js';
+import { computedTrades, openBook, startingCapital, EXIT_REASONS, assetLabel, tradeCcy } from './calc.js';
+import { rate as fxRate } from '../fx.js';
 import { sidePill, setupName, fmtDays } from './common.js';
 import { cryptoPricesUSD, stockPricesUSD, normSymbol } from '../networth/prices.js';
 import { refresh } from '../main.js';
@@ -38,7 +39,7 @@ export async function closePositionModal(t, { mode = 'close', leg = null } = {})
   // quantity available to this exit: what's open now (+ this leg's own qty when editing)
   const avail = +(t.openQty + (editing ? leg.qty : 0)).toFixed(8);
   const defQty = editing ? exec.qty : mode === 'partial' ? +(avail / 2).toFixed(avail % 2 && avail < 10 ? 4 : 0) || avail / 2 : avail;
-  const unit = (t.mult || 1) * t.dir;
+  const unit = (t.mult || 1) * t.dir * (t.fxFactor || 1); // P&L shown in the display currency
   const title = editing ? `Edit exit — ${t.symbol}` : mode === 'partial' ? `Take partial profit — ${t.symbol}` : `Close ${t.symbol}`;
   const res = await modal({
     title,
@@ -112,7 +113,8 @@ export async function refreshMarks() {
   for (const t of open) {
     const p = t.assetClass === 'crypto' ? c.prices[base(t.symbol)] : t.assetClass === 'stock' ? k.prices[normSymbol(t.symbol)] : null;
     if (!p) continue;
-    await store.put('trades', { ...store.get('trades', t.id), mark: p.usd, markAt: now, markSource: p.source });
+    // quotes are in USD; the trade is recorded in its account's currency
+    await store.put('trades', { ...store.get('trades', t.id), mark: +(p.usd * fxRate(tradeCcy(t))).toPrecision(10), markAt: now, markSource: p.source });
     n++;
   }
   const skipped = open.filter(t => !['crypto', 'stock'].includes(t.assetClass)).length;
