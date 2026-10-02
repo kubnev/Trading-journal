@@ -1,9 +1,24 @@
 # Journal — trading journal & net worth tracker
 
-A private, local-first web app with two sections:
+A private, local-first web app for three things:
 
-- **Trading journal**: trades with scale-in/out executions, R-multiples, a playbook, a daily journal, a P&L calendar, and reports on setups, time, risk (MAE/MFE) and psychology.
-- **Net worth**: assets and debts, monthly balance snapshots, allocation, liquidity, cash flow and savings rate, and financial-independence planning (FI number, years to FI, Coast FI).
+- **Net worth:**
+  - Accounts and holdings (live crypto/stock prices).
+  - Fixed-yield accounts that grow daily.
+  - Custody and purpose buckets.
+  - Analytics with a balance-sheet health check.
+  - Cash flow and FI planning.
+- **Daily journal:**
+  - Mood, energy and sleep check-in, with habits and intentions.
+  - Reflection, plus a check-in on each open position.
+  - Insights.
+- **Swing trading:**
+  - Thesis-first trade log.
+  - Open positions with live P&L and portfolio heat.
+  - Performance and reports by setup, catalyst, holding period and exit reason.
+  - Playbook.
+
+A **?** button (top right, or the `?` key) opens page help and a guided tour.
 
 One global **Simple / Pro** switch (top of the sidebar) applies to both sections. Simple shows the essentials; Pro unlocks every field, report and chart. Both modes use the same data.
 
@@ -25,11 +40,13 @@ Each update writes today's snapshot, so the history builds itself.
 3. Commit and push to `main`.
 
 ## Design language
-The colour tokens at the top of `css/app.css` are shared with `kubnev/bruh-lad`:
-- **Light:** warm paper neutrals with an amber `#9a5b13` accent.
-- **Dark:** `#151517` background with an amber `#e0a458` accent.
-- **Status colours:** green for good/profit, red for danger/loss.
+Modelled on Claude's interface. The colour tokens at the top of `css/app.css` are close approximations, not official values:
+- **Light:** ivory `#faf9f5` with a clay `#c96442` accent.
+- **Dark:** charcoal `#262624` with a clay `#d97757` accent.
+- **Type:** headings use a serif. Source Serif 4 (OFL, in `vendor/fonts`) stands in for Claude's proprietary typefaces.
 - **Modes:** Light / Dark / Auto.
+
+To reuse the design in other apps, copy the token block and the `@font-face` rules.
 
 ## Run locally
 The app uses ES modules, so it must be served over HTTP rather than opened as a file:
@@ -55,6 +72,8 @@ js/main.js            router, navigation, notices
 js/version.js         app version, changelog, update check
 scripts/version.mjs   regenerates version.json
 js/demo.js            demo data generator
-js/trading/           calc.js (all metrics) + views
+js/journal/views.js   daily journal, history, insights
+js/help.js            help drawer + guided tour
+js/trading/           calc.js (metrics), positions.js (open book), trades.js, reports…
 js/networth/          calc.js (all metrics), prices.js (live prices) + views
 ```

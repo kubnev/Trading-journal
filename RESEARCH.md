@@ -155,3 +155,73 @@ A net-worth account can be **linked to a trading account**. Its balance is then 
 - [SoFi — personal finance ratios](https://www.sofi.com/learn/content/important-personal-finance-ratios/)
 - [Mad Fientist — financial independence spreadsheet](https://www.madfientist.com/financial-independence-spreadsheet/)
 - [WalletBurst — savings rate & FIRE calculators](https://walletburst.com/tools/savings-rate-calculator/)
+
+
+---
+
+## Part 3 — Swing trading (v0.4 focus)
+
+The app is now tuned for a swing trader taking roughly 10 trades a month and holding them for days to weeks, rather than a day trader. Low trade frequency changes what matters:
+
+| What changes | Why | Where in the app |
+|---|---|---|
+| **Thesis written at entry** (setup + catalyst + invalidation) | The single most useful field. You can compare the outcome with what you expected, not just with the price. | Trade form, *Thesis* section |
+| **Catalyst, timeframe, market regime, sector, conviction** | With few trades, you learn from *categories*. Win rate on earnings plays vs technical breakouts, and whether high conviction actually pays. | Pro form → Reports › Setups |
+| **Planned vs actual holding period**, days held | Swing edges usually live in a specific holding window. Holding losers longer than winners is the classic leak. | Reports › Timing, Performance "R vs days held" |
+| **Initial stop (= 1R) vs current/trailed stop** | R is measured on the initial risk. The trailed stop decides what's still at risk. | Form + Open positions |
+| **Mid-trade updates** | A two-minute daily note per open position builds a timeline you review at exit. | Daily journal check-in → trade timeline |
+| **Exit reason** | Target / stopped / trailed / thesis invalidated / time stop… shows *how* trades end and which exits leak. | Close dialog, Reports › Risk |
+| **Overnight costs**: funding, borrow, swap | Real money on multi-day crypto perps and shorts. | Pro form |
+| **Open positions with live prices**: unrealised P&L, R now, distance to stop/target | For swing trading the open book is what you manage daily. | Open positions |
+| **Portfolio heat** = Σ loss if every current stop is hit ÷ capital | The key risk number for overlapping positions. Common guideline: keep it under ~6%. | Open positions, Performance |
+| **Risk % of capital per trade** | Standard sizing discipline (0.5–1% typical). | Form preview |
+
+Intraday-only analytics were removed or demoted: hour-of-day, minutes-held buckets, and daily Sharpe and green/red days, which are meaningless at around 10 trades a month.
+
+## Part 4 — Net worth, deeper
+
+Commercial trackers (Kubera, Empower, Monarch) centre on aggregation plus a dashboard. Planners add ratio analysis and concentration checks. What was added in v0.4:
+
+- **Fixed-yield accounts:** APY on savings, money-market funds and staking. Balances grow daily as `last balance × (1 + APY)^(days/365)`, and a live "earned today" ticker shows yield per day, month and year.
+- **Custody / counterparty:** each asset is tagged bank, broker, crypto exchange (CEX), DeFi/DEX protocol, self-custody wallet, or physical. Exchange balances carry counterparty risk (insolvency, freezes); self-custody trades that for key-loss risk. Analytics shows the split and its history.
+- **Purpose buckets:** emergency fund, trading capital, long-term, retirement, crypto, short-term goals… These answer "what is this money *for*", alongside "what is it".
+- **Liquidity ladder:** cash (instant) → liquid investments (days) → locked/retirement → illiquid (months+).
+- **Concentration:** largest investments as % of investable assets, plus the *effective number of positions* = 1 ÷ Herfindahl index of weights. The home is excluded on purpose.
+- **Balance-sheet health scorecard:** planner rules of thumb, shown as guidelines.
+
+  | Measure | Guideline |
+  |---|---|
+  | Emergency fund | 3–6+ months |
+  | Savings rate | 20%+ |
+  | Debt-to-asset | < 50% |
+  | Solvency | > 50% |
+  | Investable share of net worth | 25–50%+ |
+  | Passive-income coverage | yield income ÷ expenses |
+  | Largest position | < ~20% |
+  | Single custodian type, exchange exposure | flagged as concentration |
+- **Growth:** CAGR of net worth, average change per update, share of periods that were up.
+
+Trading capital can sit in net worth either as a *linked* account (balance follows the journal) or as a manual one. They are kept separate by default, as decided.
+
+## Part 5 — Daily journal
+
+Research on trading psychology and performance journaling points to a short, *daily* routine as the habit that matters:
+- **Morning check-in:** mood, energy, focus, sleep, intention, habits, optional market plan.
+- **Evening reflection:** day rating, discipline, what went well, what to improve, gratitude, a lesson for tomorrow.
+- **Insights:** streaks, 7-day-smoothed mood/energy, sleep, habit completion, mood by weekday, and day P&L when in a good vs low mood and after 7h+ vs short sleep. Small samples are labelled as noisy.
+
+## Design language (v0.4)
+
+The design is modelled on Claude's interface:
+- **Colours:** warm ivory (#faf9f5) and charcoal (#262624) neutrals, with a clay accent (#c96442 / #d97757).
+- **Typography:** serif display type for headings and numbers, and the system sans for UI.
+
+Claude's actual typefaces are proprietary, so **Source Serif 4** (SIL OFL, vendored locally) stands in for the serif. The colour values are close approximations, not official tokens. The chart palette leads with clay and was checked with a colour-vision-deficiency validator.
+
+Sources (additional):
+- [Swing trading journal: fields that matter](https://traderssecondbrain.com/guides/trading-journal-for-swing-trading)
+- [JournalPlus — swing trading journal guide](https://journalplus.co/learn/guides/swing-trading-journal-guide/)
+- [Kubera review](https://thecollegeinvestor.com/36895/kubera-review/)
+- [FPA Journal — personal financial ratios](https://www.financialplanningassociation.org/sites/default/files/2021-10/JAN06%20JFP%20Farrell%20PDF.pdf)
+- [Concentration risk / Herfindahl index](https://en.wikipedia.org/wiki/Concentration_risk)
+- [Self-custody vs exchange custody](https://www.cointracker.com/blog/towards-sovereignty-crypto-self-custody)

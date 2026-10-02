@@ -1,7 +1,7 @@
 import * as store from '../store.js';
 import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, modal, toast, confirmDlg, formData, toNum, monthKey, parseDay, dayKey } from '../ui.js';
 import * as C from '../charts.js';
-import { ASSET_CATS, LIAB_CATS, catLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, fiMetrics, projection, changeDecomposition, debtMetrics } from './calc.js';
+import { ASSET_CATS, LIAB_CATS, catLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, fiMetrics, projection, changeDecomposition, debtMetrics, CUSTODY, custodyOf, custodyLabel, PURPOSES, purposeOf, TIERS, yieldSummary, liveValue, positions, concentration } from './calc.js';
 import { loadDemo } from '../demo.js';
 import { updateAllPrices, summaryText, holdingsTotal, holdingValue, syncHoldingsSnapshot, normSymbol } from './prices.js';
 import { go, refresh, query } from '../main.js';
@@ -47,6 +47,22 @@ function rangeFilter(series) {
   return series.slice(Math.max(0, i - 1));
 }
 
+// ================= live yield ticker =================
+// enough decimals that the counter visibly moves every second
+const tickDecimals = perSecond => Math.max(2, Math.min(7, Math.ceil(-Math.log10(perSecond || 1e-2)) + 1));
+export function yieldCard() {
+  const y = yieldSummary();
+  if (!y.accts.length) return '';
+  return html`<div class="card ticker-card" data-ticker>
+    <div class="row"><div><div class="stat-label">Earned today from yields</div><div class="stat-value ticker pos" data-earned>${money(y.earnedToday, { decimals: tickDecimals(y.perSecond) })}</div></div><span class="spacer"></span>
+      <dl class="kv cols2 small" style="min-width:min(420px,100%)"><dt>Per day</dt><dd>${money(y.perDay, { decimals: 2 })}</dd><dt>Per month</dt><dd>${money(y.perMonth)}</dd><dt>Per year</dt><dd>${money(y.perYear)}</dd><dt>Blended APY</dt><dd>${pct(y.blendedApy, 2)}</dd></dl></div>
+    <div class="small muted mt">${y.accts.length} yield account${y.accts.length > 1 ? 's' : ''} (${y.accts.map(a => `${a.name} ${a.apy}%`).join(', ')}) · balances grow daily from your last update, compounding at the stated APY.</div></div>`;
+}
+export function startTicker(root) {
+  if (!yieldSummary().accts.length) return null;
+  return setInterval(() => { const el = root.querySelector('[data-earned]'); if (el) { const y = yieldSummary(); el.textContent = money(y.earnedToday, { decimals: tickDecimals(y.perSecond) }); } }, 1000);
+}
+
 // ================= overview =================
 export async function overview(el, _p, { mode }) {
   const pro = mode === 'pro';
@@ -84,6 +100,7 @@ export async function overview(el, _p, { mode }) {
         ${stat('Total assets', money(cur.assets), { sub: `${accts.filter(a => a.kind !== 'liability' && !a.archivedAt).length} accounts` })}
         ${stat('Total liabilities', money(cur.liabilities), { cls: cur.liabilities ? 'neg' : '', sub: `${accts.filter(a => a.kind === 'liability' && !a.archivedAt).length} debts` })}
       </div>
+      ${yieldCard() ? html`<div class="mt">${yieldCard()}</div>` : ''}
       ${pro ? html`<div class="stats mt">
         ${stat('Liquid net worth', money(cur.liquidNet), { cls: pnlClass(cur.liquidNet), sub: 'liquid assets − all debts', help: 'Liquid assets (cash, savings, brokerage, crypto, trading) minus all liabilities — what you could access in days.' })}
         ${stat('YoY change', yearAgo ? money(cur.net - yearAgo.net, { sign: true }) : '—', { cls: yearAgo ? pnlClass(cur.net - yearAgo.net) : '', sub: yearAgo && yearAgo.net > 0 ? pct((cur.net - yearAgo.net) / yearAgo.net, 1, { sign: true }) : '' })}
@@ -150,6 +167,8 @@ export async function overview(el, _p, { mode }) {
     }
   };
   draw();
+  let tick = startTicker(body);
+  return () => clearInterval(tick);
 }
 
 // ================= update balances =================
@@ -169,7 +188,7 @@ export async function update(el) {
         if (!list.length) return '';
         return html`<fieldset><legend>${l}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
           const v = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcct[a.id] || '';
-          return html`<label class="field">${a.name} <span class="hint">${catLabel(a.category)}${a.linkedTradingAccountId ? ' · auto from trading journal' : a.tracksHoldings ? ' · from holdings × prices' : ''}</span>
+          return html`<label class="field">${a.name} <span class="hint">${catLabel(a.category)}${a.linkedTradingAccountId ? ' · auto from trading journal' : a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
             <input type="number" step="any" name="${a.id}" value="${a.linkedTradingAccountId ? Math.round(prior.byAcct[a.id] * 100) / 100 : a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.linkedTradingAccountId || a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
         })}</div></fieldset>`;
       })}
@@ -219,6 +238,9 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
         <label class="field">Monthly payment<input name="payment" type="number" step="any" min="0" value="${a.payment ?? ''}"></label>
       </div>
       <div class="ast full form-grid" style="padding:0">
+        <label class="field">Held at<select name="custody">${CUSTODY.map(c => html`<option value="${c.id}" ${custodyOf(a) === c.id ? raw('selected') : ''}>${c.label}</option>`)}</select></label>
+        <label class="field">Purpose / bucket<input name="purpose" value="${a.purpose || ''}" placeholder="${purposeOf({ ...a, purpose: '' })}" list="purposes"><datalist id="purposes">${PURPOSES.map(p => html`<option>${p}</option>`)}</datalist></label>
+        <label class="field">Fixed yield (APY %) <span class="hint">savings, money market, staking</span><input name="apy" type="number" step="any" min="0" max="100" value="${a.apy ?? ''}" placeholder="e.g. 4.2"></label>
         <label class="field">Liquid?<select name="liquid"><option value="">Auto (by category)</option><option value="yes" ${a.liquid === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.liquid === false ? raw('selected') : ''}>No</option></select></label>
         <label class="field">Counts toward FI?<select name="investable"><option value="">Auto (by category)</option><option value="yes" ${a.investable === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.investable === false ? raw('selected') : ''}>No</option></select></label>
         <label class="check full"><input type="checkbox" name="tracksHoldings" ${a.tracksHoldings ? raw('checked') : ''}> Track individual holdings (crypto / stocks) — value = quantity × price, with one-click price updates</label>
@@ -239,7 +261,8 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
   const yn = v => (v === 'yes' ? true : v === 'no' ? false : null);
   const obj = { ...a, kind: res.kind, category: res.category, name: res.name.trim(), institution: res.institution, notes: res.notes,
     rate: toNum(res.rate), payment: toNum(res.payment), liquid: yn(res.liquid), investable: yn(res.investable), linkedTradingAccountId: res.kind === 'liability' ? '' : res.linkedTradingAccountId || '',
-    tracksHoldings: res.kind !== 'liability' && !!res.tracksHoldings, holdings: a.holdings || [] };
+    tracksHoldings: res.kind !== 'liability' && !!res.tracksHoldings, holdings: a.holdings || [],
+    custody: res.kind === 'liability' ? '' : res.custody, purpose: res.kind === 'liability' ? '' : (res.purpose || '').trim(), apy: res.kind === 'liability' ? null : toNum(res.apy) };
   if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
   const saved = await store.put('nwAccounts', obj);
   if (saved.tracksHoldings && !a.tracksHoldings) { await editHoldings(saved); return saved; }
@@ -307,14 +330,14 @@ export async function accounts(el, _p, { mode }) {
   const cur = pointAt(today());
   const sec = (title, list) => html`<div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>${title}</h2><span class="hint">${money(list.filter(a => !a.archivedAt).reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0))}</span></div>
     <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Category</th><th>Institution</th>${pro ? raw('<th>Details</th>') : ''}<th class="num">Latest balance</th><th></th></tr></thead><tbody>
-    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}</td><td>${catLabel(a.category)}</td><td>${a.institution || ''}</td>
-      ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${money(a.payment)}/mo` : ''].filter(Boolean).join(' · ') : [isLiquid(a) ? 'liquid' : 'illiquid', isInvestable(a) ? 'counts toward FI' : ''].filter(Boolean).join(' · ')}</td>` : ''}
+    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}</td><td>${catLabel(a.category)}</td><td>${a.institution || ''}</td>
+      ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${money(a.payment)}/mo` : ''].filter(Boolean).join(' · ') : [custodyLabel(custodyOf(a)), purposeOf(a), +a.apy ? `${a.apy}% APY` : '', isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>` : ''}
       <td class="num">${money(cur.byAcct[a.id] || 0)}</td>
       <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
     </tbody></table></div></div>`;
   const assets = accts.filter(a => a.kind !== 'liability').sort((a, b) => !!a.archivedAt - !!b.archivedAt || a.name.localeCompare(b.name));
   const liabs = accts.filter(a => a.kind === 'liability').sort((a, b) => !!a.archivedAt - !!b.archivedAt || a.name.localeCompare(b.name));
-  el.innerHTML = String(html`<div class="page-head"><div><h1>Assets & debts</h1><div class="sub">Everything you own and owe. Closing an account (sold, paid off) keeps its history.</div></div>
+  el.innerHTML = String(html`<div class="page-head"><div><h1>Accounts & holdings</h1><div class="sub">Everything you own and owe. Closing an account (sold, paid off) keeps its history.</div></div>
     <div class="actions">${priceBtn()}<button class="btn" data-new-l>+ Add debt</button><button class="btn primary" data-new>+ Add asset</button></div></div>
     ${!accts.length ? html`<div class="empty"><div class="empty-title">No accounts yet</div><p>Typical list: checking, savings, brokerage, retirement, crypto, home, car — and mortgage, car loan, credit cards.</p><button class="btn primary" data-new>+ Add asset</button><button class="btn" data-new-l>+ Add debt</button><button class="btn" data-demo>Load demo data</button></div>` : ''}
     ${assets.length ? sec('Assets', assets) : ''}
@@ -466,5 +489,83 @@ export async function plan(el) {
     type: 'bar',
     data: { labels: assetCats.map(c => c.label), datasets: [{ label: 'Current', data: assetCats.map(c => (cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0) * 100), backgroundColor: p.series[0], maxBarThickness: 14 }, { label: 'Target', data: assetCats.map(c => +pl.targetAllocation?.[c.id] || 0), backgroundColor: p.neutral, maxBarThickness: 14 }] },
     options: { indexAxis: 'y', plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${num(c.parsed.x, 1)}%` } } }, scales: { x: { grid: { color: p.grid }, border: { display: false }, ticks: { callback: v => v + '%' } }, y: C.plainAxis({ ticks: { autoSkip: false } }) } },
+  });
+}
+
+// ================= analytics =================
+export async function analytics(el, _p, { mode }) {
+  const series = nwSeries();
+  el.innerHTML = String(html`<div class="page-head"><div><h1>Net worth analytics</h1><div class="sub">Where your money sits, what it's for, how concentrated it is, and how healthy the balance sheet looks.</div></div></div><div id="body"></div>`);
+  const body = el.querySelector('#body');
+  if (!series.length) { body.innerHTML = String(emptyNW()); wireDemo(body); return; }
+  const cur = series.at(-1);
+  const p = C.palette();
+  const t12 = trailing(cashflowMonths());
+  const y = yieldSummary();
+  const pos = positions(cur, { investableOnly: true });
+  const conc = concentration(pos);
+  const posTotal = pos.reduce((a, x) => a + x.value, 0);
+  const finCust = custody => custody.filter(c => !['physical', 'other'].includes(c.id));
+  const custody = CUSTODY.map(c => ({ ...c, v: cur.byCustody[c.id] || 0 })).filter(c => c.v > 0).sort((a, b) => b.v - a.v);
+  const purposes = Object.entries(cur.byPurpose).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const tiers = TIERS.map(t => ({ t, v: cur.byTier[t] || 0 }));
+  const crypto = store.all('nwAccounts').filter(a => a.category === 'crypto' && a.kind !== 'liability').reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0);
+  const annualExp = t12.avgExpenses ? t12.avgExpenses * 12 : null;
+  const cash = (cur.byCat.cash || 0) + (cur.byCat.savings || 0);
+  // growth
+  const monthly = [];
+  for (let i = 1; i < series.length; i++) monthly.push(series[i].net - series[i - 1].net);
+  const yrs = series.length > 1 ? (parseDay(cur.date) - parseDay(series[0].date)) / (365.25 * 864e5) : 0;
+  const cagr = yrs >= 1 && series[0].net > 0 && cur.net > 0 ? Math.pow(cur.net / series[0].net, 1 / yrs) - 1 : null;
+  const health = [
+    ['Emergency fund', t12.avgExpenses ? cash / t12.avgExpenses : null, v => `${num(v, 1)} months`, v => v >= 6 ? 'good' : v >= 3 ? 'ok' : 'bad', '3–6+ months of expenses in cash'],
+    ['Savings rate (12m)', t12.rate, v => pct(v, 1), v => v >= 0.2 ? 'good' : v >= 0.1 ? 'ok' : 'bad', '20%+ of take-home pay'],
+    ['Debt-to-asset', cur.assets ? cur.liabilities / cur.assets : null, v => pct(v, 1), v => v <= 0.3 ? 'good' : v <= 0.5 ? 'ok' : 'bad', 'under 50%, ideally under 30%'],
+    ['Solvency (net worth ÷ assets)', cur.assets ? cur.net / cur.assets : null, v => pct(v, 1), v => v >= 0.5 ? 'good' : v >= 0.2 ? 'ok' : 'bad', 'above 50%'],
+    ['Investable share of net worth', cur.net > 0 ? cur.investable / cur.net : null, v => pct(v, 0), v => v >= 0.5 ? 'good' : v >= 0.25 ? 'ok' : 'bad', '25%+, rising over time (50%+ is strong)'],
+    ['Passive income coverage', annualExp ? y.perYear / annualExp : null, v => pct(v, 1), v => v >= 1 ? 'good' : v >= 0.25 ? 'ok' : 'bad', 'yield income ÷ annual expenses (100% = covered)'],
+    ['Largest investment position', conc.top1, v => `${pct(v, 1)} · ${pos[0]?.label}`, v => v <= 0.2 ? 'good' : v <= 0.35 ? 'ok' : 'bad', 'under ~20% of investable assets'],
+    ['Largest custodian type', finCust(custody).length ? finCust(custody)[0].v / finCust(custody).reduce((a, c) => a + c.v, 0) : null, v => `${pct(v, 0)} · ${finCust(custody)[0]?.label}`, v => v <= 0.5 ? 'good' : v <= 0.7 ? 'ok' : 'bad', 'share of financial assets with one type of custodian'],
+    ['On crypto exchanges', cur.assets ? (cur.byCustody.cex || 0) / cur.assets : null, v => pct(v, 1), v => v <= 0.1 ? 'good' : v <= 0.25 ? 'ok' : 'bad', 'exchange balances carry counterparty risk'],
+  ];
+  const icon = k => (k === 'good' ? raw('<span class="pos">✔</span>') : k === 'ok' ? raw('<span style="color:var(--warn)">●</span>') : raw('<span class="neg">▲</span>'));
+
+  body.innerHTML = String(html`
+    <div class="stats big">
+      ${stat('Net worth', money(cur.net), { sub: `as of ${fmtDate(cur.date)}` })}
+      ${stat('Growth (CAGR)', cagr != null ? pct(cagr, 1, { sign: true }) : '—', { sub: cagr != null ? `over ${num(yrs, 1)} years` : 'needs a year of history' })}
+      ${stat('Avg change / update', monthly.length ? money(monthly.reduce((a, b) => a + b, 0) / monthly.length, { sign: true }) : '—', { sub: monthly.length ? `${pct(monthly.filter(x => x > 0).length / monthly.length, 0)} of periods up` : '' })}
+      ${stat('Passive income', money(y.perYear), { sub: annualExp ? `${pct(y.perYear / annualExp, 0)} of expenses` : 'per year from yields' })}
+      ${stat('Effective positions', conc.effective ? num(conc.effective, 1) : '—', { sub: conc.top5 != null ? `top 5 = ${pct(conc.top5, 0)} of investments` : '', help: '1 ÷ Herfindahl index of investable position weights: how many equal-sized positions your investments behave like. Higher = more diversified.' })}
+      ${stat('Crypto exposure', pct(cur.assets ? crypto / cur.assets : null, 1), { sub: money(crypto) })}
+    </div>
+    <div class="grid g2 mt">
+      <div class="card"><div class="card-head"><h2>Where it's held</h2><span class="hint">counterparty / custody</span></div><div class="chart"><canvas id="a-cust"></canvas></div></div>
+      <div class="card"><div class="card-head"><h2>What it's for</h2><span class="hint">purpose buckets</span></div><div class="chart"><canvas id="a-purp"></canvas></div></div>
+    </div>
+    <div class="grid g2 mt">
+      <div class="card"><div class="card-head"><h2>Liquidity ladder</h2><span class="hint">how fast you could reach it</span></div><div class="chart short"><canvas id="a-tier"></canvas></div></div>
+      <div class="card"><div class="card-head"><h2>Largest investments</h2><span class="hint">% of investable assets</span></div><div class="chart short"><canvas id="a-top"></canvas></div></div>
+    </div>
+    <div class="grid g-2-1 mt">
+      <div class="card"><div class="card-head"><h2>Custody over time</h2><span class="hint">stacked</span></div><div class="chart"><canvas id="a-custt"></canvas></div></div>
+      <div class="card"><div class="card-head"><h2>By custody</h2></div><table class="data compact"><tbody>${custody.map(c => html`<tr><td>${c.label}</td><td class="num">${money(c.v)}</td><td class="num">${pct(c.v / cur.assets, 1)}</td></tr>`)}</tbody></table>
+        <h3 class="mt">By purpose</h3><table class="data compact"><tbody>${purposes.map(([k, v]) => html`<tr><td>${k}</td><td class="num">${money(v)}</td><td class="num">${pct(v / cur.assets, 1)}</td></tr>`)}</tbody></table></div>
+    </div>
+    <div class="card mt"><div class="card-head"><h2>Balance-sheet health</h2><span class="hint">rules of thumb used by planners — context matters</span></div>
+      <table class="data"><thead><tr><th></th><th>Measure</th><th class="num">You</th><th>Guideline</th></tr></thead><tbody>
+      ${health.map(([name, v, f, judge, guide]) => html`<tr><td style="width:28px">${v == null ? html`<span class="muted">–</span>` : icon(judge(v))}</td><td>${name}</td><td class="num">${v == null ? html`<span class="muted">needs data</span>` : f(v)}</td><td class="small muted">${guide}</td></tr>`)}
+      </tbody></table></div>`);
+
+  C.doughnut(body.querySelector('#a-cust'), { labels: custody.map(c => c.label), values: custody.map(c => c.v), colors: custody.map(c => p.series[CUSTODY.findIndex(x => x.id === c.id) % 8]), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
+  C.doughnut(body.querySelector('#a-purp'), { labels: purposes.map(x => x[0]), values: purposes.map(x => x[1]), center: { value: String(purposes.length), label: 'buckets' } });
+  C.plainBars(body.querySelector('#a-tier'), { labels: tiers.map(x => x.t), values: tiers.map(x => x.v), horizontal: true, fmt: v => money(v, { compact: true }), label: 'Value' });
+  const top = pos.slice(0, 8);
+  C.plainBars(body.querySelector('#a-top'), { labels: top.map(x => x.label), values: top.map(x => (x.value / posTotal) * 100), horizontal: true, fmt: v => num(v, 1) + '%', label: 'Share of investments' });
+  const used = CUSTODY.filter(c => series.some(s => (s.byCustody[c.id] || 0) > 0));
+  C.make(body.querySelector('#a-custt'), {
+    type: 'line',
+    data: { labels: series.map(s => fmtDate(s.date, { month: 'short', year: '2-digit' })), datasets: used.map(c => { const col = p.series[CUSTODY.findIndex(x => x.id === c.id) % 8]; return { label: c.label, data: series.map(s => s.byCustody[c.id] || 0), borderColor: col, backgroundColor: C.alpha(col, 0.5), fill: true, borderWidth: 1, tension: 0.15, pointRadius: 0 }; }) },
+    options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}` } } }, scales: { x: C.plainAxis({ ticks: { maxTicksLimit: 8, maxRotation: 0 } }), y: { stacked: true, ...C.moneyAxis() } } },
   });
 }

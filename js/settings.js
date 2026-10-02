@@ -43,11 +43,13 @@ export default async function settingsView(el) {
         </form>
 
         <form class="card" id="lists">
-          <div class="card-head"><h2>Trading tag lists</h2><span class="hint">One per line</span></div>
+          <div class="card-head"><h2>Lists — tags, habits</h2><span class="hint">One per line</span></div>
           <div class="form-grid">
             <label class="field">Mistakes<textarea name="mistakes" rows="8">${s.tagLists.mistakes.join('\n')}</textarea></label>
             <label class="field">Emotions<textarea name="emotions" rows="8">${s.tagLists.emotions.join('\n')}</textarea></label>
             <label class="field">Tags / conditions<textarea name="tags" rows="8">${s.tagLists.tags.join('\n')}</textarea></label>
+            <label class="field">Daily habits<textarea name="habits" rows="8">${(s.habits || []).join('\n')}</textarea></label>
+            <label class="field">Journal day tags<textarea name="dayTags" rows="8">${(s.dayTags || []).join('\n')}</textarea></label>
           </div>
           <div class="row mt"><span class="spacer"></span><button class="btn primary">Save lists</button></div>
         </form>
@@ -122,7 +124,7 @@ export default async function settingsView(el) {
     e.preventDefault();
     const f = formData(e.target);
     const lines = v => [...new Set(v.split('\n').map(x => x.trim()).filter(Boolean))];
-    await store.saveSettings({ tagLists: { mistakes: lines(f.mistakes), emotions: lines(f.emotions), tags: lines(f.tags) } });
+    await store.saveSettings({ tagLists: { mistakes: lines(f.mistakes), emotions: lines(f.emotions), tags: lines(f.tags) }, habits: lines(f.habits), dayTags: lines(f.dayTags) });
     toast('Lists saved');
   };
 

@@ -1,5 +1,5 @@
 import { all, get, getSettings } from '../store.js';
-import { html, raw, money, pnlClass, rmult, fmtDateTime, price, esc } from '../ui.js';
+import { html, raw, money, pnlClass, rmult, fmtDateTime, fmtDate, price, esc } from '../ui.js';
 import { DEFAULT_FILTER, ASSET_CLASSES, computedTrades, filterTrades, startingCapital } from './calc.js';
 
 // Filter state survives navigation within the session.
@@ -58,18 +58,21 @@ export function filterBar(host, onChange, { count, pro = true } = {}) {
 
 export const sidePill = s => html`<span class="pill ${s}">${s === 'short' ? 'SHORT' : 'LONG'}</span>`;
 
+export const tradeHead = pro => raw(`<tr><th>Date</th><th>Symbol</th><th>Side</th>${pro ? '<th>Setup</th>' : ''}<th class="num">Days</th><th class="num">Entry</th><th class="num">Exit</th><th class="num">Net P&L</th><th class="num">R</th>${pro ? '<th>Exit reason</th><th>Grade</th>' : ''}</tr>`);
+export const fmtDays = d => (d == null ? '—' : d < 1 ? '<1' : String(Math.round(d)));
+
 export function tradeRow(t, { pro }) {
   return html`<tr class="click" data-href="#/trading/trade/${t.id}">
-    <td class="num" style="text-align:left">${fmtDateTime(t.closeDate || t.openDate)}</td>
+    <td style="white-space:nowrap">${fmtDate(t.closeDate || t.openDate, { month: 'short', day: 'numeric', year: '2-digit' })}</td>
     <td><span class="sym">${t.symbol}</span></td>
     <td>${sidePill(t.side)}${t.closed ? '' : html` <span class="pill open">OPEN</span>`}</td>
     ${pro ? html`<td>${setupName(t.setupId)}</td>` : ''}
-    <td class="num">${t.maxPos || t.entryQty || '—'}</td>
+    <td class="num">${fmtDays(t.daysHeld)}</td>
     <td class="num">${price(t.avgEntry)}</td>
     <td class="num">${price(t.avgExit)}</td>
-    <td class="num ${pnlClass(t.net)}">${t.closed ? money(t.net, { sign: true }) : '—'}</td>
-    <td class="num ${pnlClass(t.r)}">${rmult(t.r)}</td>
-    ${pro ? html`<td>${t.grade ? html`<span class="grade">${t.grade}</span>` : ''}</td><td>${(t.mistakes || []).slice(0, 2).map(m => html`<span class="tag bad">${m}</span>`)}${(t.mistakes || []).length > 2 ? html`<span class="tag">+${t.mistakes.length - 2}</span>` : ''}</td>` : ''}
+    <td class="num ${pnlClass(t.closed ? t.net : t.unreal)}">${t.closed ? money(t.net, { sign: true }) : t.unreal != null ? html`<span title="Unrealised">${money(t.unreal, { sign: true })}*</span>` : '—'}</td>
+    <td class="num ${pnlClass(t.r ?? t.unrealR)}">${t.closed ? rmult(t.r) : t.unrealR != null ? rmult(t.unrealR) + '*' : '—'}</td>
+    ${pro ? html`<td class="small">${t.exitReason || ''}</td><td>${t.grade ? html`<span class="grade">${t.grade}</span>` : ''}</td>` : ''}
   </tr>`;
 }
 

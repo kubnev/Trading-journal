@@ -1,7 +1,8 @@
-// Realistic sample data for both sections. Every record is flagged `demo: true`
-// so it can be removed without touching the user's own entries.
+// Realistic sample data: a swing trader (~8–10 trades a month), a daily journal,
+// and a net-worth history with yields, crypto across custodians and purpose buckets.
+// Every record is flagged `demo: true` so it can be removed without touching real entries.
 import * as store from './store.js';
-import { dayKey, localDT, monthKey } from './ui.js';
+import { dayKey, monthKey } from './ui.js';
 import { holdingsTotal } from './networth/prices.js';
 
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -12,167 +13,190 @@ export async function removeDemo() { for (const c of COLS) await store.delWhere(
 
 export async function loadDemo() {
   if (hasDemo()) await removeDemo();
-  const R = rng(20260930);
+  const R = rng(20261002);
   const pick = a => a[Math.floor(R() * a.length)];
   const between = (a, b) => a + R() * (b - a);
   const normal = () => { let u = 0, v = 0; while (!u) u = R(); while (!v) v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
   const id = () => store.uid();
   const now = new Date();
-
-  // ---------------- trading ----------------
-  const acct = { id: id(), demo: true, name: 'Demo — Margin', broker: 'Interactive Brokers', type: 'margin', startingBalance: 50000, startDate: dayKey(new Date(now.getFullYear(), now.getMonth() - 7, 1)) };
-  const prop = { id: id(), demo: true, name: 'Demo — Prop 100K', broker: 'Funded futures', type: 'prop', startingBalance: 0 };
-  const xfers = [{ id: id(), demo: true, accountId: acct.id, type: 'deposit', date: dayKey(new Date(now.getFullYear(), now.getMonth() - 4, 3)), amount: 10000, note: 'Added capital' },
-    { id: id(), demo: true, accountId: prop.id, type: 'withdrawal', date: dayKey(new Date(now.getFullYear(), now.getMonth() - 1, 15)), amount: 1500, note: 'First payout' }];
-  const S = (name, tf, winP, winR, lossR, extra) => ({ id: id(), demo: true, active: true, name, timeframe: tf, winP, winR, lossR, ...extra });
-  const setups = [
-    S('Opening range breakout', '5m', 0.5, [1.2, 3.2], [-1.05, -0.4], { description: 'Break of the first 15-minute range on a stock in play with relative volume > 2.', conditions: 'Gap > 2% with a catalyst, RVOL > 2, market not chopping.', entry: 'Buy/sell the first 5m close outside the 15m range.', stopRule: 'Other side of the 5m trigger candle or mid-range.', exit: 'Scale 1/2 at 2R, trail rest under 9 EMA.', rules: ['Stock in play (catalyst + RVOL > 2)', 'Clean range, not wider than ATR', 'Market direction agrees', 'Risk ≤ 0.5% of account', 'Stop placed immediately'] }),
-    S('VWAP pullback', '2m', 0.57, [0.8, 2.2], [-1.0, -0.3], { description: 'Trend-day pullback to VWAP that holds, then continuation.', conditions: 'Clear trend from the open, higher lows above VWAP.', entry: 'First higher low after a VWAP touch.', stopRule: 'Below the pullback low.', exit: 'Prior high of day, then trail.', rules: ['Trend day confirmed', 'Pullback on lighter volume', 'Hold of VWAP on a closing basis', 'Risk ≤ 0.5% of account'] }),
-    S('Gap fade', '5m', 0.4, [0.8, 2], [-1.2, -0.5], { description: 'Fading overextended gaps without news into the prior close.', conditions: 'Gap > 3% without catalyst; weak premarket volume.', entry: 'First lower high after 9:45.', stopRule: 'High of day.', exit: 'Prior day close.', rules: ['No real catalyst', 'Extended from daily ATR', 'Lower high formed', 'Wait until 9:45'] }),
-    S('Daily trend continuation', 'Daily', 0.44, [1.5, 5], [-1.0, -0.4], { description: 'Swing entries on flags in strong daily uptrends.', conditions: 'Price above rising 20/50 SMA, sector strength.', entry: 'Break of a 3–10 day flag high.', stopRule: 'Below flag low.', exit: 'Close below 10 EMA.', rules: ['Above rising 50 SMA', 'Tight flag (< 1.5 ATR)', 'No earnings within 5 days', 'Relative strength vs SPY'] }),
-    S('NQ liquidity sweep', '1m', 0.48, [1, 3], [-1, -0.6], { description: 'Futures reversal after a sweep of overnight high/low.', conditions: 'Clear overnight range, open within it.', entry: 'Reclaim of the swept level on 1m.', stopRule: 'Beyond the sweep extreme.', exit: 'Opposite side of overnight range.', rules: ['Sweep of ONH/ONL', 'Reclaim candle closes back inside', 'Not within 5 min of red news'] }),
-  ];
-  const stocks = { AAPL: 225, NVDA: 128, TSLA: 245, AMD: 158, META: 560, MSFT: 430, AMZN: 188, SMCI: 42, PLTR: 36, COIN: 215, SPY: 565, QQQ: 485 };
-  const futures = { MNQ: [19800, 2], NQ: [19800, 20], MES: [5700, 5] };
+  const dt = d => `${dayKey(d)}T${d.getHours() < 10 ? '0' : ''}${d.getHours()}:00`;
   const sets = store.getSettings().tagLists;
-  const trades = [], days = [];
-  const start = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-  const DAY_PLANS = ['Focus on A+ ORB only. Max 3 trades. Stop after 2 losers.', 'CPI at 8:30 — wait for the first 15 minutes to settle. Only trade with the trend.', 'Chop yesterday. Sit on hands unless a clear trend day develops.', 'NVDA and SMCI in play after earnings. Watching premarket highs.', 'Market gapping up into resistance. Be patient with longs; gap-fade candidates on watch.', 'Friday — size down after 11:00.'];
-  const RECAPS = ['Followed the plan, took the A setup and managed it well. Left some on the table on the runner.', 'Overtraded in the midday chop. Two trades I should never have taken.', 'Great patience. Waited for the pullback and got paid.', 'Chased the first move and got stopped. Recovered by sticking to VWAP pullbacks afterwards.', 'Red day but all trades were within the rules — acceptable loss.', 'Revenge trade after the first stop. Need a hard rule: 10-minute break after a loss.'];
-  const LESSONS = ['No trades between 11:30 and 13:30.', 'Wait for the 5m close, not the wick.', 'Size down after two losers.', 'Let runners work — trail, don\'t target.', 'Take the partial at 2R every time.'];
 
+  // ---------------- trading (swing) ----------------
+  const acct = { id: id(), demo: true, name: 'Demo — IBKR swing', broker: 'Interactive Brokers', type: 'margin', startingBalance: 40000, startDate: dayKey(new Date(now.getFullYear() - 1, now.getMonth(), 1)) };
+  const cex = { id: id(), demo: true, name: 'Demo — Bybit', broker: 'Bybit', type: 'crypto', startingBalance: 12000 };
+  const xfers = [{ id: id(), demo: true, accountId: acct.id, type: 'deposit', date: dayKey(new Date(now.getFullYear(), now.getMonth() - 6, 3)), amount: 10000, note: 'Added capital' }];
+  const S = (name, tf, winP, winR, lossR, hold, extra) => ({ id: id(), demo: true, active: true, name, timeframe: tf, winP, winR, lossR, hold, ...extra });
+  const setups = [
+    S('Base breakout', 'Daily', 0.45, [1.5, 4.5], [-1.05, -0.5], [4, 25], { description: 'Breakout from a 3–8 week base on rising volume in a leading stock.', conditions: 'Market in uptrend, stock RS line at highs.', entry: 'Close above the pivot on 1.5× average volume.', stopRule: 'Below the low of the breakout day or 7% max.', exit: 'Sell 1/3 at 3R, trail the rest under the 21-day EMA.', rules: ['Market above 50-day MA', 'Base 3+ weeks, depth < 30%', 'Volume ≥ 1.5× average on breakout', 'Risk ≤ 1% of capital', 'No earnings within 7 days'] }),
+    S('Pullback to 21 EMA', 'Daily', 0.55, [1, 2.8], [-1, -0.4], [3, 12], { description: 'Buy the first orderly pullback to the 21 EMA in a strong trend.', conditions: 'Stock up 20%+ in 2 months, tight pullback on lower volume.', entry: 'Reclaim of the prior day high near the 21 EMA.', stopRule: 'Below the pullback low.', exit: 'Prior high, then trail.', rules: ['Strong prior trend', 'Pullback on declining volume', 'Holds 21 EMA on a closing basis', 'Risk ≤ 1% of capital'] }),
+    S('Weekly trend continuation', 'Weekly', 0.42, [2, 6], [-1, -0.5], [15, 60], { description: 'Position-size swing in a multi-month weekly uptrend.', conditions: 'Weekly higher highs and higher lows, above the 10-week MA.', entry: 'Weekly close above a flag.', stopRule: 'Below the flag low on a weekly close.', exit: 'Weekly close under the 10-week MA.', rules: ['Weekly uptrend intact', 'Sector leading', 'Position ≤ 15% of capital'] }),
+    S('Crypto range reclaim', '4h', 0.5, [1.2, 3.5], [-1.05, -0.5], [2, 10], { description: 'Reclaim of a range low after a sweep on BTC/ETH/majors.', conditions: 'Clear multi-day range, funding not extreme.', entry: '4h close back inside the range.', stopRule: 'Below the sweep low.', exit: 'Range midpoint, then range high.', rules: ['Range ≥ 5 days', 'Sweep + reclaim on 4h close', 'Funding neutral', 'Risk ≤ 0.75%'] }),
+  ];
+  const stocks = { NVDA: [128, 'Semis'], AMD: [158, 'Semis'], AVGO: [172, 'Semis'], META: [560, 'Internet'], AMZN: [188, 'Internet'], PLTR: [36, 'Software'], CRWD: [310, 'Software'], NOW: [910, 'Software'], LLY: [880, 'Healthcare'], XOM: [118, 'Energy'], CAT: [360, 'Industrials'], SPY: [565, 'Index'], QQQ: [485, 'Index'], GLD: [245, 'Commodities'] };
+  const coins = { BTC: [68000, 'L1'], ETH: [3200, 'L1'], SOL: [150, 'L1'], LINK: [14, 'Oracles'], AVAX: [28, 'L1'] };
+  const PLANS = ['Market above the 50-day — focus on breakouts in leaders, max 3 new positions this week.', 'CPI Wednesday — no new entries before the print.', 'Semis extended; looking for pullbacks rather than chasing.', 'Choppy tape. Sit on hands unless an A+ setup appears.', 'BTC holding the range low — watching for a reclaim.', 'Earnings season: no holding through reports unless sized down.'];
+  const RECAPS = ['Quiet day. Reviewed positions, trailed stops on winners.', 'Stuck to the plan; skipped two mediocre setups.', 'Got impatient and entered early — need to wait for the close.', 'Good energy, productive day, journaled everything.', 'Distracted by the screen — checked prices too often.', 'Solid day: one clean entry, everything else was patience.'];
+  const LESSONS = ['Wait for the daily close before acting.', 'Size down when the market is choppy.', 'Let winners work — trail, don\'t target.', 'No new trades on low-sleep days.', 'Write the thesis BEFORE entering.', 'Losers that don\'t work in 5 days rarely do.'];
+  const INTENTS = ['Deep work on the project, gym, no screen time after 9pm.', 'Review watchlist and update stops. Keep it light.', 'Finish the report, walk at lunch, read 30 minutes.', 'Patience with trades; focus on work.', 'Plan the week, update balances, call family.'];
+
+  const trades = [];
+  const start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
   for (let d = new Date(start); d <= now; d.setDate(d.getDate() + 1)) {
     if (d.getDay() === 0 || d.getDay() === 6) continue;
-    if (R() < 0.12) continue; // days off
-    const k = dayKey(d);
-    const n = Math.max(1, Math.round(between(0.6, 4.4)));
-    const tilt = R() < 0.15; // bad day: more mistakes
-    for (let i = 0; i < n; i++) {
-      const isFut = R() < 0.22;
-      const setup = isFut ? setups[4] : pick(setups.slice(0, 4));
-      const swing = setup.timeframe === 'Daily';
-      const side = setup.name === 'Gap fade' ? 'short' : R() < (isFut ? 0.5 : 0.28) ? 'short' : 'long';
-      const dir = side === 'short' ? -1 : 1;
-      let symbol, base, mult = 1, asset = 'stock';
-      if (isFut) { symbol = pick(Object.keys(futures)); [base, mult] = futures[symbol]; asset = 'future'; }
-      else { symbol = pick(Object.keys(stocks)); base = stocks[symbol]; }
-      base *= 1 + normal() * 0.06;
-      const hour = Math.min(15, 9 + Math.floor(Math.abs(normal()) * 1.8) + (R() < 0.15 ? 3 : 0));
-      const minute = hour === 9 ? 30 + Math.floor(R() * 30) : Math.floor(R() * 60);
-      const open = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute);
-      const stopDist = isFut ? between(8, 30) : base * between(0.004, swing ? 0.04 : 0.012);
-      const riskUsd = isFut ? between(150, 450) : between(150, 350);
-      let qty = Math.max(1, Math.round(riskUsd / (stopDist * mult)));
-      const mistakes = [];
-      if (R() < (tilt ? 0.6 : 0.18)) mistakes.push(pick(sets.mistakes));
-      if (tilt && R() < 0.3) mistakes.push(pick(sets.mistakes));
-      const mistakePenalty = mistakes.length ? 0.14 : 0;
-      const win = R() < setup.winP - mistakePenalty + (hour >= 12 && hour < 14 ? -0.08 : 0);
-      let r = win ? between(...setup.winR) : between(...setup.lossR);
-      if (!win && mistakes.some(m => /Moved stop|No stop|Held loser|Averaged/.test(m))) r -= between(0.3, 1.2);
-      if (R() < 0.05) r = between(-0.05, 0.05);
-      const entry = base;
-      const exit = entry + dir * r * stopDist;
-      const stop = entry - dir * stopDist;
-      const holdMin = swing ? between(60 * 24, 60 * 24 * 9) : Math.max(1, Math.abs(normal()) * (win ? 22 : 35) + 2);
-      let close = new Date(open.getTime() + holdMin * 60000);
-      if (close.getDay() === 6 || close.getDay() === 0) close = new Date(close.getTime() - (close.getDay() === 6 ? 1 : 2) * 86400000);
-      if (close <= open) close = new Date(open.getTime() + 3600000);
-      if (close > now) close = new Date(Math.max(open.getTime() + 60000, now.getTime() - 3600000));
-      const fee = isFut ? qty * 1.24 : Math.max(1, qty * 0.005);
-      const scale = !isFut && win && r > 1.5 && R() < 0.55;
-      const openAct = side === 'short' ? 'sell' : 'buy', closeAct = side === 'short' ? 'buy' : 'sell';
-      if (scale && qty < 2) qty = 2;
-      const executions = [{ id: id(), action: openAct, datetime: localDT(open), qty, price: +entry.toFixed(2), fee: +(fee / 2).toFixed(2) }];
+    if (R() > 0.42) continue; // ~9 trade ideas a month
+    const isCrypto = R() < 0.3;
+    const setup = isCrypto ? setups[3] : pick(setups.slice(0, 3));
+    let symbol, base, sector;
+    if (isCrypto) { symbol = pick(Object.keys(coins)); [base, sector] = coins[symbol]; } else { symbol = pick(Object.keys(stocks)); [base, sector] = stocks[symbol]; }
+    base *= 1 + normal() * 0.08;
+    const side = isCrypto ? (R() < 0.35 ? 'short' : 'long') : R() < 0.1 ? 'short' : 'long';
+    const dir = side === 'short' ? -1 : 1;
+    const open = new Date(d.getFullYear(), d.getMonth(), d.getDate(), isCrypto ? 8 + Math.floor(R() * 12) : 15, 0);
+    const stopDist = base * between(isCrypto ? 0.03 : 0.035, isCrypto ? 0.08 : 0.08);
+    const capital = isCrypto ? 12000 : 45000;
+    const riskUsd = capital * between(0.005, 0.01);
+    const qty = isCrypto ? +(riskUsd / stopDist).toFixed(base > 1000 ? 4 : 2) : Math.max(1, Math.round(riskUsd / stopDist));
+    const mistakes = R() < 0.22 ? [pick(sets.mistakes)] : [];
+    const win = R() < setup.winP - (mistakes.length ? 0.12 : 0);
+    let r = win ? between(...setup.winR) : between(...setup.lossR);
+    if (!win && mistakes.some(m => /Moved stop|No stop|Held loser|Averaged/.test(m))) r -= between(0.3, 1);
+    const holdDays = win ? between(...setup.hold) : between(1, setup.hold[1] * 0.6);
+    let close = new Date(open.getTime() + holdDays * 864e5);
+    const stillOpen = close > now;
+    if (close.getDay() === 6) close = new Date(close.getTime() - 864e5);
+    if (close.getDay() === 0 && !isCrypto) close = new Date(close.getTime() - 2 * 864e5);
+    if (close <= open) close = new Date(open.getTime() + 864e5);
+    const entry = +base.toFixed(base > 100 ? 2 : 4);
+    const stop = +(entry - dir * stopDist).toFixed(base > 100 ? 2 : 4);
+    const target = +(entry + dir * setup.winR[1] * 0.8 * stopDist).toFixed(base > 100 ? 2 : 4);
+    const fee = isCrypto ? +(qty * entry * 0.0005).toFixed(2) : Math.max(1, +(qty * 0.005).toFixed(2));
+    const openAct = side === 'short' ? 'sell' : 'buy', closeAct = side === 'short' ? 'buy' : 'sell';
+    const executions = [{ id: id(), action: openAct, datetime: dt(open), qty, price: entry, fee }];
+    const updates = [];
+    let currentStop = null, mark = null;
+    if (!stillOpen) {
+      const scale = win && r > 2 && R() < 0.5 && qty >= 2;
       if (scale) {
-        const half = Math.floor(qty / 2);
-        const p1 = entry + dir * 2 * stopDist * 0.98;
-        const p2 = entry + dir * ((r * qty - 2 * half) / (qty - half)) * stopDist;
-        executions.push({ id: id(), action: closeAct, datetime: localDT(new Date(open.getTime() + holdMin * 30000)), qty: half, price: +p1.toFixed(2), fee: +(fee / 4).toFixed(2) });
-        executions.push({ id: id(), action: closeAct, datetime: localDT(close), qty: qty - half, price: +p2.toFixed(2), fee: +(fee / 4).toFixed(2) });
-      } else executions.push({ id: id(), action: closeAct, datetime: localDT(close), qty, price: +exit.toFixed(2), fee: +(fee / 2).toFixed(2) });
-      const maeR = win ? -between(0, 0.85) : Math.min(r, -between(0.8, 1.05));
-      const mfeR = Math.max(r, 0) + between(0.05, win ? 1.8 : 0.9);
-      const emotions = [pick(mistakes.length ? ['Anxious', 'Frustrated', 'Impatient', 'Greedy', 'Fearful', 'Tired'] : ['Calm', 'Focused', 'Confident', 'Calm', 'Bored'])];
-      const followedPlan = mistakes.length ? R() < 0.15 : R() < 0.94;
-      const grade = followedPlan ? (R() < 0.55 ? 'A' : 'B') : mistakes.length > 1 ? pick(['D', 'F']) : pick(['C', 'D']);
-      const checklist = Object.fromEntries(setup.rules.map((_, j) => [j, followedPlan ? R() < 0.92 : R() < 0.55]));
-      const tags = [];
-      if (R() < 0.3) tags.push(pick(sets.tags));
-      if (followedPlan && win && R() < 0.3) tags.push('A+ setup');
-      trades.push({
-        id: id(), demo: true, accountId: isFut ? prop.id : acct.id, symbol, assetClass: asset, side, multiplier: mult, executions,
-        stop: +stop.toFixed(2), target: +(entry + dir * setup.winR[1] * 0.8 * stopDist).toFixed(2), setupId: setup.id,
-        mae: +(entry + dir * maeR * stopDist).toFixed(2), mfe: +(entry + dir * mfeR * stopDist).toFixed(2),
-        timeframe: setup.timeframe, grade, confidence: Math.max(1, Math.min(5, Math.round(3 + normal() + (followedPlan ? 0.5 : -0.5)))), followedPlan, checklist,
-        tags: [...new Set(tags)], mistakes: [...new Set(mistakes)], emotions,
-        notes: win ? `${setup.name} on ${symbol}. ${pick(['Clean trigger, held well.', 'Volume confirmed the move.', 'Took partial into strength.', 'Patient entry, good R.'])}` : `${setup.name} on ${symbol}. ${pick(['Failed quickly.', 'Market turned against it.', 'Entry was early.', 'Stopped out at the level.'])}`,
-        lessons: mistakes.length ? pick(LESSONS) : '', images: [],
-      });
+        const half = isCrypto ? +(qty / 2).toFixed(4) : Math.floor(qty / 2);
+        const mid = new Date(open.getTime() + holdDays * 0.45 * 864e5);
+        executions.push({ id: id(), action: closeAct, datetime: dt(mid), qty: half, price: +(entry + dir * 2.5 * stopDist).toFixed(4), fee });
+        executions.push({ id: id(), action: closeAct, datetime: dt(close), qty: +(qty - half).toFixed(4), price: +(entry + dir * ((r * qty - 2.5 * half) / (qty - half)) * stopDist).toFixed(4), fee });
+        updates.push({ date: dayKey(mid), note: 'Took 1/2 off at 2.5R, stop to breakeven.', stop: entry });
+      } else executions.push({ id: id(), action: closeAct, datetime: dt(close), qty, price: +(entry + dir * r * stopDist).toFixed(4), fee });
+    } else {
+      // still running: trailed stop + a recent mark
+      const progress = between(-0.6, 2.2);
+      currentStop = progress > 1 ? entry : null;
+      const upd = d0 => dayKey(new Date(Math.max(open.getTime(), d0)));
+      if (progress > 1) updates.push({ date: upd(now.getTime() - between(1, 4) * 864e5), note: 'Working. Moved stop to breakeven.', stop: entry });
+      updates.push({ date: upd(now.getTime() - 864e5), note: pick(['Thesis intact, holding.', 'Volume drying up on the pullback — good.', 'Watching the 21 EMA.']) });
+      mark = +(entry + dir * progress * stopDist).toFixed(4);
     }
-    if (R() < 0.72) days.push({ id: k, demo: true, mood: Math.max(1, Math.min(5, Math.round(3.4 + normal() * 0.9 - (tilt ? 1 : 0)))), sleep: +(between(5.5, 8.5)).toFixed(1), bias: pick(['Bullish', 'Bearish', 'Neutral', 'Range']), plan: pick(DAY_PLANS), maxLoss: 1000, recap: tilt ? pick(RECAPS.filter(x => /Overtraded|Revenge|Chased/.test(x))) : pick(RECAPS), lesson: pick(LESSONS), discipline: tilt ? pick([1, 2, 3]) : pick([3, 4, 4, 5]), grade: tilt ? pick(['C', 'D']) : pick(['A', 'B', 'B']), rulesOk: !tilt });
+    const exitReason = stillOpen ? '' : win ? (r > setup.winR[1] * 0.75 ? 'Target hit' : pick(['Trailing stop', 'Took profit early', 'Time stop'])) : r < -0.9 ? 'Stopped out' : pick(['Thesis invalidated', 'Time stop', 'Risk off / market']);
+    const followedPlan = mistakes.length ? R() < 0.2 : R() < 0.92;
+    trades.push({
+      id: id(), demo: true, accountId: isCrypto ? cex.id : acct.id, symbol, assetClass: isCrypto ? 'crypto' : 'stock', side, multiplier: 1, executions,
+      stop, target, currentStop, setupId: setup.id, timeframe: setup.timeframe, sector, regime: pick(['Uptrend', 'Uptrend', 'Range', 'Volatile / news']),
+      catalyst: isCrypto ? pick(['Technical breakout', 'Mean reversion', 'Token unlock / listing', 'Macro data']) : pick(['Technical breakout', 'Pullback to support', 'Earnings', 'Sector rotation', 'News / event']),
+      conviction: Math.max(1, Math.min(5, Math.round(3 + normal()))), plannedDays: Math.round((setup.hold[0] + setup.hold[1]) / 2),
+      thesis: `${setup.name} in ${symbol}. ${pick(['Leader in a strong group, tight structure.', 'Clean base, volume dried up before the move.', 'Reclaimed key level with conviction.', 'Relative strength vs the index all month.'])} Invalid below ${stop}.`,
+      funding: isCrypto && !stillOpen ? +(normal() * 4).toFixed(2) : null,
+      mae: stillOpen ? null : +(entry - dir * (win ? between(0.1, 0.8) : between(0.9, 1.05)) * stopDist).toFixed(4),
+      mfe: stillOpen ? null : +(entry + dir * (Math.max(r, 0) + between(0.1, 1.2)) * stopDist).toFixed(4),
+      ...(stillOpen ? { mark, markAt: now.toISOString(), markSource: 'demo' } : {}),
+      exitReason, grade: followedPlan ? (R() < 0.5 ? 'A' : 'B') : pick(['C', 'D']), followedPlan,
+      checklist: Object.fromEntries(setup.rules.map((_, j) => [j, followedPlan ? R() < 0.92 : R() < 0.5])),
+      tags: R() < 0.3 ? [pick(sets.tags)] : [], mistakes, emotions: [pick(mistakes.length ? ['Impatient', 'Anxious', 'Greedy', 'Frustrated'] : ['Calm', 'Focused', 'Confident'])],
+      updates, review: stillOpen ? '' : win ? 'Played out as planned.' : pick(['Setup failed quickly — the stop did its job.', 'Entered before confirmation.', 'Market turned risk-off.']), lessons: mistakes.length ? pick(LESSONS) : '', images: [],
+    });
+  }
+  // keep only a few positions open
+  let opens = trades.filter(t => t.mark != null);
+  for (const t of opens.slice(0, Math.max(0, opens.length - 4))) trades.splice(trades.indexOf(t), 1);
+
+  // ---------------- daily journal ----------------
+  const days = [];
+  const habits = store.getSettings().habits || [];
+  for (let d = new Date(now.getFullYear(), now.getMonth() - 5, now.getDate()); d < now; d.setDate(d.getDate() + 1)) {
+    if (R() > 0.78) continue;
+    const sleep = +Math.max(4.5, Math.min(9, 7 + normal() * 0.9)).toFixed(1);
+    const mood = Math.max(1, Math.min(5, Math.round(3.2 + (sleep - 7) * 0.5 + normal() * 0.8)));
+    days.push({
+      id: dayKey(d), demo: true, mood, energy: Math.max(1, Math.min(5, Math.round(mood + normal() * 0.7))), focus: Math.max(1, Math.min(5, Math.round(3 + normal()))), sleep,
+      intention: pick(INTENTS), plan: R() < 0.6 ? pick(PLANS) : '', bias: pick(['Bullish', 'Neutral', 'Range', 'Bearish']),
+      dayRating: Math.max(1, Math.min(5, Math.round(mood + normal() * 0.6))), discipline: Math.max(1, Math.min(5, Math.round(3.6 + normal() * 0.9))),
+      recap: pick(RECAPS), lesson: R() < 0.5 ? pick(LESSONS) : '', gratitude: R() < 0.4 ? pick(['Health', 'Family dinner', 'A good book', 'Quiet morning']) : '',
+      habits: Object.fromEntries(habits.map((h, i) => [h, R() < [0.6, 0.5, 0.35, 0.85, 0.8, 0.7][i % 6]])), tags: R() < 0.12 ? [pick(store.getSettings().dayTags || ['Travel'])] : [],
+    });
   }
 
-  await store.putMany('tAccounts', [acct, prop]);
+  await store.putMany('tAccounts', [acct, cex]);
   await store.putMany('tTransfers', xfers);
-  await store.putMany('setups', setups.map(({ winP, winR, lossR, ...s }) => s));
+  await store.putMany('setups', setups.map(({ winP, winR, lossR, hold, ...s }) => s));
   await store.putMany('trades', trades);
   await store.putMany('days', days.filter(d => !store.get('days', d.id)));
 
   // ---------------- net worth ----------------
   const A = (name, kind, category, extra = {}) => ({ id: id(), demo: true, name, kind, category, ...extra });
   const nw = {
-    checking: A('Checking', 'asset', 'cash', { institution: 'Chase' }),
-    hysa: A('High-yield savings', 'asset', 'savings', { institution: 'Ally' }),
-    brokerage: A('Index funds', 'asset', 'brokerage', { institution: 'Vanguard' }),
-    k401: A('401(k)', 'asset', 'retirement', { institution: 'Fidelity' }),
-    ira: A('Roth IRA', 'asset', 'retirement', { institution: 'Fidelity' }),
-    crypto: A('Crypto', 'asset', 'crypto', { institution: 'Coinbase', tracksHoldings: true, holdings: [
-      { id: id(), type: 'crypto', symbol: 'BTC', qty: 0.05, price: 98000, cost: 2900, priceSource: 'demo', priceAt: now.toISOString() },
-      { id: id(), type: 'crypto', symbol: 'ETH', qty: 0.8, price: 3400, cost: 2100, priceSource: 'demo', priceAt: now.toISOString() },
-      { id: id(), type: 'crypto', symbol: 'SOL', qty: 6, price: 160, cost: 1150, priceSource: 'demo', priceAt: now.toISOString() },
+    checking: A('Checking', 'asset', 'cash', { institution: 'Revolut', custody: 'bank', purpose: 'Spending' }),
+    hysa: A('High-yield savings', 'asset', 'savings', { institution: 'Trade Republic', custody: 'bank', purpose: 'Emergency fund', apy: 3.75 }),
+    mmf: A('Money-market fund', 'asset', 'savings', { institution: 'IBKR', custody: 'broker', purpose: 'Short-term goals', apy: 4.6, liquid: true }),
+    etf: A('ETF portfolio', 'asset', 'brokerage', { institution: 'IBKR', custody: 'broker', purpose: 'Long-term investing' }),
+    pension: A('Pension fund', 'asset', 'retirement', { institution: 'Pension', custody: 'broker', purpose: 'Retirement' }),
+    cexAcc: A('Binance spot', 'asset', 'crypto', { institution: 'Binance', custody: 'cex', purpose: 'Crypto', tracksHoldings: true, holdings: [
+      { id: id(), type: 'crypto', symbol: 'SOL', qty: 18, price: 150, cost: 2100, priceSource: 'demo', priceAt: now.toISOString() },
+      { id: id(), type: 'crypto', symbol: 'LINK', qty: 140, price: 14, cost: 1650, priceSource: 'demo', priceAt: now.toISOString() },
+      { id: id(), type: 'crypto', symbol: 'USDC', qty: 2500, price: 1, cost: 2500, priceSource: 'demo', priceAt: now.toISOString() },
     ] }),
-    trading: A('Trading account', 'asset', 'trading', { linkedTradingAccountId: acct.id }),
-    home: A('Home', 'asset', 'realestate'),
+    cold: A('Cold wallet (BTC)', 'asset', 'crypto', { institution: 'Hardware wallet', custody: 'self', purpose: 'Long-term investing', tracksHoldings: true, holdings: [
+      { id: id(), type: 'crypto', symbol: 'BTC', qty: 0.12, price: 68000, cost: 4200, priceSource: 'demo', priceAt: now.toISOString() },
+    ] }),
+    defi: A('Staked ETH (Lido)', 'asset', 'crypto', { institution: 'Lido', custody: 'dex', purpose: 'Crypto', apy: 3.1 }),
+    trading: A('Swing trading capital', 'asset', 'trading', { institution: 'IBKR', custody: 'broker', purpose: 'Trading capital', linkedTradingAccountId: acct.id }),
+    bybit: A('Bybit trading capital', 'asset', 'trading', { institution: 'Bybit', custody: 'cex', purpose: 'Trading capital', linkedTradingAccountId: cex.id }),
+    home: A('Apartment', 'asset', 'realestate', { purpose: 'Home & property' }),
     car: A('Car', 'asset', 'vehicle'),
-    mortgage: A('Mortgage', 'liability', 'mortgage', { institution: 'Wells Fargo', rate: 3.25, payment: 1650 }),
-    auto: A('Auto loan', 'liability', 'auto', { rate: 6.4, payment: 520 }),
-    cc: A('Credit card', 'liability', 'credit', { institution: 'Amex', rate: 24.9 }),
+    mortgage: A('Mortgage', 'liability', 'mortgage', { institution: 'Bank', rate: 3.4, payment: 820 }),
+    cc: A('Credit card', 'liability', 'credit', { institution: 'Amex', rate: 21 }),
   };
   const M = 30;
   const snaps = [], cash = [];
-  let v = { checking: 5200, hysa: 14000, brokerage: 48000, k401: 71000, ira: 22000, crypto: 6500, home: 395000, car: 31000, mortgage: 318000, auto: 24000, cc: 1800 };
+  let v = { checking: 3800, hysa: 9000, mmf: 4000, etf: 26000, pension: 18000, defi: 4200, home: 185000, car: 19000, mortgage: 142000, cc: 900 };
   for (let i = M; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const mk = monthKey(d);
     const mkt = 0.007 + normal() * 0.035;
-    const income = Math.round(8600 + normal() * 250 + (d.getMonth() === 11 ? 9000 : 0) + (i < 12 ? 600 : 0));
-    const expenses = Math.round(5200 + normal() * 600 + (d.getMonth() === 6 ? 2500 : 0));
+    const income = Math.round(5600 + normal() * 200 + (d.getMonth() === 11 ? 5000 : 0) + (i < 12 ? 400 : 0));
+    const expenses = Math.round(3300 + normal() * 380 + (d.getMonth() === 7 ? 1800 : 0));
     const saved = income - expenses;
     if (i < M) {
-      v.brokerage = v.brokerage * (1 + mkt) + saved * 0.45;
-      v.k401 = v.k401 * (1 + mkt) + 1350;
-      v.ira = v.ira * (1 + mkt * 1.05) + (d.getMonth() < 6 ? 580 : 0);
-      v.crypto = Math.max(500, v.crypto * (1 + 0.01 + normal() * 0.14) + 150);
-      v.hysa = v.hysa * 1.0036 + saved * 0.25;
-      v.checking = Math.max(2500, 5200 + normal() * 1200);
-      v.home *= 1 + 0.0028 + normal() * 0.004;
-      v.car *= 0.989;
-      v.mortgage = v.mortgage * (1 + 0.0325 / 12) - 1650 * 0.55;
-      v.auto = Math.max(0, v.auto * (1 + 0.064 / 12) - 520);
-      v.cc = Math.max(300, 1800 + normal() * 700);
-      cash.push({ id: mk, demo: true, income, expenses, note: d.getMonth() === 11 ? 'Year-end bonus' : d.getMonth() === 6 ? 'Vacation' : '' });
+      v.etf = v.etf * (1 + mkt) + saved * 0.4;
+      v.pension = v.pension * (1 + mkt * 0.8) + 350;
+      v.hysa = v.hysa * (1 + 0.0375 / 12) + saved * 0.2;
+      v.mmf = v.mmf * (1 + 0.046 / 12) + saved * 0.1;
+      v.defi = Math.max(800, v.defi * (1 + 0.01 + normal() * 0.11));
+      v.checking = Math.max(1500, 3800 + normal() * 700);
+      v.home *= 1 + 0.003 + normal() * 0.004;
+      v.car *= 0.99;
+      v.mortgage = v.mortgage * (1 + 0.034 / 12) - 820 * 0.6;
+      v.cc = Math.max(200, 900 + normal() * 400);
+      cash.push({ id: mk, demo: true, income, expenses, note: d.getMonth() === 11 ? 'Year-end bonus' : d.getMonth() === 7 ? 'Holiday' : '' });
     }
     const balances = {};
-    for (const [k, a] of Object.entries(nw)) if (k !== 'trading' && !(k === 'auto' && v.auto <= 0 && i < 3)) balances[a.id] = Math.round(v[k] * 100) / 100;
+    for (const [k, a] of Object.entries(nw)) if (k in v) balances[a.id] = Math.round(v[k] * 100) / 100;
+    // crypto holdings accounts: rough history that ends at today's holdings value
+    const f = Math.max(0.35, 1 - i * 0.022 + normal() * 0.08);
+    balances[nw.cexAcc.id] = Math.round(holdingsTotal(nw.cexAcc) * (i ? f : 1));
+    balances[nw.cold.id] = Math.round(holdingsTotal(nw.cold) * (i ? Math.max(0.4, 1 - i * 0.02 + normal() * 0.07) : 1));
     snaps.push({ id: id(), demo: true, date: dayKey(d), balances });
   }
-  snaps.at(-1).balances[nw.crypto.id] = Math.round(holdingsTotal(nw.crypto) * 100) / 100; // latest = holdings value
   await store.putMany('nwAccounts', Object.values(nw));
   await store.putMany('nwSnapshots', snaps.filter(s => !store.all('nwSnapshots').some(x => x.date === s.date)));
   await store.putMany('nwCashflow', cash.filter(c => !store.get('nwCashflow', c.id)));
   const pl = store.getSettings().plan;
   if (!Object.keys(pl.targetAllocation || {}).length) {
-    await store.saveSettings({ plan: { currentAge: 34, retirementAge: 55, targetAllocation: { cash: 3, savings: 7, brokerage: 22, trading: 8, retirement: 25, crypto: 3, realestate: 30, vehicle: 2 } } });
+    await store.saveSettings({ plan: { currentAge: 31, retirementAge: 50, targetAllocation: { cash: 3, savings: 10, brokerage: 25, trading: 12, retirement: 10, crypto: 10, realestate: 28, vehicle: 2 } } });
   }
 }

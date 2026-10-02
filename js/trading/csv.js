@@ -28,9 +28,9 @@ export function exportTradesCSV() {
   const cols = [
     ['account', t => accountName(t.accountId)], ['symbol', t => t.symbol], ['asset_class', t => t.assetClass], ['side', t => t.side], ['multiplier', t => t.mult],
     ['open_datetime', t => t.openDate], ['close_datetime', t => t.closeDate], ['qty', t => t.maxPos], ['avg_entry', t => t.avgEntry], ['avg_exit', t => t.avgExit],
-    ['fees', t => t.fees], ['gross_pnl', t => t.gross], ['net_pnl', t => t.net], ['stop', t => t.stop], ['target', t => t.target], ['risk', t => t.risk], ['r_multiple', t => t.r],
-    ['mae', t => t.mae], ['mfe', t => t.mfe], ['setup', t => (t.setupId ? setupName(t.setupId) : '')], ['grade', t => t.grade], ['followed_plan', t => t.followedPlan],
-    ['tags', t => (t.tags || []).join(';')], ['mistakes', t => (t.mistakes || []).join(';')], ['emotions', t => (t.emotions || []).join(';')], ['notes', t => t.notes], ['lessons', t => t.lessons],
+    ['days_held', t => (t.daysHeld == null ? '' : +t.daysHeld.toFixed(2))], ['fees', t => t.fees], ['funding', t => t.funding || ''], ['gross_pnl', t => t.gross], ['net_pnl', t => t.net], ['stop', t => t.stop], ['target', t => t.target], ['risk', t => t.risk], ['r_multiple', t => t.r],
+    ['mae', t => t.mae], ['mfe', t => t.mfe], ['setup', t => (t.setupId ? setupName(t.setupId) : '')], ['thesis', t => t.thesis], ['catalyst', t => t.catalyst], ['timeframe', t => t.timeframe], ['regime', t => t.regime], ['sector', t => t.sector], ['conviction', t => t.conviction], ['exit_reason', t => t.exitReason], ['current_stop', t => t.currentStop], ['grade', t => t.grade], ['followed_plan', t => t.followedPlan],
+    ['tags', t => (t.tags || []).join(';')], ['mistakes', t => (t.mistakes || []).join(';')], ['emotions', t => (t.emotions || []).join(';')], ['review', t => t.review || t.notes], ['lessons', t => t.lessons],
   ];
   const out = [cols.map(c => c[0]).join(','), ...ts.map(t => cols.map(([, f]) => csvCell(f(t) ?? '')).join(','))].join('\n');
   download(`trades-${today()}.csv`, out, 'text/csv');

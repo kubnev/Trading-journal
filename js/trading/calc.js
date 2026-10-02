@@ -49,6 +49,8 @@ export function computeTrade(t) {
   const closed = entryQty > 0 && pos <= EPS;
   const openDate = ex[0]?.datetime || t.date || null;
   const closeDate = closed ? ex[ex.length - 1]?.datetime : null;
+  const funding = +t.funding || 0;            // swap / borrow / perp funding paid (+) or received (−)
+  fees += funding;
   const gross = realized;
   const net = gross - fees;
   const stop = t.stop === '' || t.stop == null ? null : +t.stop;
@@ -69,10 +71,22 @@ export function computeTrade(t) {
   const notional = avgEntry != null ? avgEntry * (maxPos || entryQty) * mult : null;
   const retPct = closed && notional ? net / notional : null;
   const outcome = !closed ? 'open' : net > EPS ? 'win' : net < -EPS ? 'loss' : 'be';
+  const daysHeld = openDate ? ((closed ? new Date(closeDate) : new Date()) - new Date(openDate)) / 864e5 : null;
+  // Open position: mark-to-market against the last known price
+  const curStop = t.currentStop === '' || t.currentStop == null ? stop : +t.currentStop;
+  const mark = !closed && t.mark != null && t.mark !== '' ? +t.mark : null;
+  const unreal = mark != null && avgEntry != null ? (mark - avgCost) * dir * pos * mult : null;
+  const unrealR = unreal != null && risk ? unreal / risk : null;
+  // risk still on the table: what you'd give back if the current stop is hit (from mark, else from entry)
+  const ref = mark ?? avgCost;
+  const openRisk = !closed && curStop != null && pos > 0 ? Math.max(0, (ref - curStop) * dir * pos * mult) : null;
+  const lockedIn = !closed && curStop != null && pos > 0 ? (curStop - avgCost) * dir * pos * mult : null;   // >0 = stop is in profit
+  const exposure = !closed && pos > 0 ? (mark ?? avgCost) * pos * mult : null;
   return {
     ...t, dir, mult, avgEntry, avgExit, entryQty, exitQty, maxPos, openQty: pos, fees, gross, net, closed, openDate, closeDate,
     day: closeDate ? dayKey(closeDate) : openDate ? dayKey(openDate) : null,
     risk, r, plannedR, maeR, mfeR, maeUsd, mfeUsd, capture, holdMs, notional, retPct, outcome,
+    daysHeld, curStop, mark, unreal, unrealR, openRisk, lockedIn, exposure, funding,
   };
 }
 
@@ -198,6 +212,7 @@ export function stats(trades, { capital = 0 } = {}) {
   const sortino = downside ? (dMean / downside) * Math.sqrt(252) : null;
 
   const holdW = mean(wins.map(t => t.holdMs).filter(x => x != null));
+  const daysW = mean(wins.map(t => t.daysHeld).filter(x => x != null)), daysL = mean(losses.map(t => t.daysHeld).filter(x => x != null)), daysAll = mean(closed.map(t => t.daysHeld).filter(x => x != null));
   const holdL = mean(losses.map(t => t.holdMs).filter(x => x != null));
   const planned = closed.filter(t => t.followedPlan === true || t.followedPlan === false);
   const adherence = planned.length ? planned.filter(t => t.followedPlan === true).length / planned.length : null;
@@ -215,7 +230,7 @@ export function stats(trades, { capital = 0 } = {}) {
     equity, dd, maxDD, maxDDPct, recovery: maxDD < -EPS ? net / -maxDD : null,
     days, tradingDays: days.length, greenDays, redDays, dayWinRate: days.length ? greenDays / days.length : null,
     avgDay: dMean, bestDay: dn.length ? Math.max(...dn) : null, worstDay: dn.length ? Math.min(...dn) : null,
-    sharpe, sortino, holdW, holdL, adherence, kelly, avgCapture: mean(captures),
+    sharpe, sortino, holdW, holdL, daysW, daysL, daysAll, adherence, kelly, avgCapture: mean(captures),
     avgMaeR: mean(closed.map(t => t.maeR).filter(x => x != null)), avgMfeR: mean(closed.map(t => t.mfeR).filter(x => x != null)),
     tradesPerDay: days.length ? n / days.length : null,
   };
@@ -239,16 +254,29 @@ export function groupBy(trades, keyFn) {
 
 export function holdBucket(ms) {
   if (ms == null) return null;
-  const m = ms / 60000;
-  if (m < 5) return '< 5m';
-  if (m < 15) return '5–15m';
-  if (m < 60) return '15–60m';
-  if (m < 240) return '1–4h';
-  if (m < 1440) return '4–24h';
-  if (m < 10080) return '1–7d';
-  return '> 7d';
+  const d = ms / 864e5;
+  if (d < 1) return '< 1 day';
+  if (d < 3) return '1–2 days';
+  if (d < 6) return '3–5 days';
+  if (d < 11) return '6–10 days';
+  if (d < 21) return '11–20 days';
+  if (d < 61) return '21–60 days';
+  return '> 60 days';
 }
-export const HOLD_ORDER = ['< 5m', '5–15m', '15–60m', '1–4h', '4–24h', '1–7d', '> 7d'];
+export const HOLD_ORDER = ['< 1 day', '1–2 days', '3–5 days', '6–10 days', '11–20 days', '21–60 days', '> 60 days'];
+
+export const TIMEFRAMES = ['4h', 'Daily', 'Weekly', 'Monthly'];
+export const REGIMES = ['Uptrend', 'Downtrend', 'Range', 'Volatile / news'];
+export const EXIT_REASONS = ['Target hit', 'Stopped out', 'Trailing stop', 'Thesis invalidated', 'Time stop', 'Took profit early', 'Risk off / market', 'Discretionary'];
+export const CATALYSTS = ['Technical breakout', 'Pullback to support', 'Earnings', 'News / event', 'Macro data', 'Sector rotation', 'Token unlock / listing', 'Mean reversion', 'None'];
+
+// Open-book summary for the positions page
+export function openBook(trades, capital) {
+  const open = trades.filter(t => !t.closed && t.openQty > 0);
+  const sum = (k) => open.reduce((s, t) => s + (t[k] || 0), 0);
+  const heat = sum('openRisk'), exposure = sum('exposure'), unreal = sum('unreal');
+  return { open, heat, exposure, unreal, heatPct: capital > 0 ? heat / capital : null, exposurePct: capital > 0 ? exposure / capital : null, priced: open.filter(t => t.mark != null).length };
+}
 
 export function rHistogram(trades) {
   const edges = [-Infinity, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, 4, Infinity];

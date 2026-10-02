@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS = {
     mistakes: ['Entered early', 'Chased entry', 'Moved stop', 'No stop', 'Oversized', 'Cut winner early', 'Held loser', 'Revenge trade', 'FOMO', 'Overtraded', 'Ignored plan', 'Averaged down'],
     emotions: ['Calm', 'Confident', 'Focused', 'Anxious', 'Fearful', 'Greedy', 'Frustrated', 'Impatient', 'Bored', 'Euphoric', 'Tired'],
   },
+  habits: ['Exercise', 'Reading', 'Meditation', 'Reviewed open positions', 'Followed trading rules', 'No impulse spending'],
+  dayTags: ['Travel', 'Sick', 'Family', 'Busy work day', 'Holiday', 'High stress'],
+  tour: { done: false },
   plan: {
     annualExpenses: 0,            // 0 → derived from cash-flow history
     withdrawalRate: 4,
