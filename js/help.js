@@ -37,10 +37,10 @@ const GUIDE = [
   { id: 'positions', title: 'Open positions', match: p => p === '/trading/positions', body: `
     <ul><li><b>↻ Refresh prices</b> marks crypto and US stocks to market; other assets via <b>Update</b>.</li>
     <li><b>R now</b> = unrealised P&L ÷ initial risk. <b>Portfolio heat</b> = what you'd lose if every current stop is hit — many swing traders keep it under ~6% of capital.</li>
-    <li><b>Update</b> moves your stop / adds a note; <b>Close</b> exits all or part of the position with an exit reason.</li></ul>` },
+    <li><b>Update</b> moves your stop / adds a note. <b>Partial</b> takes profit on part of the position (25/33/50/75% presets, optional stop to breakeven); <b>Close</b> exits the rest. Each exit keeps its own P&L and R.</li></ul>` },
   { id: 'trade', title: 'Logging a swing trade', match: p => p.startsWith('/trading/new') || p.includes('/edit'), body: `
     <ul><li>Write the <b>thesis</b> before you enter: setup, catalyst, and what would prove you wrong.</li>
-    <li>Leave the exit empty while the trade is open. Scale in/out with several entries/exits (Pro).</li>
+    <li>Leave the exit empty while the trade is open. For partial take-profits use <b>Take partial profit</b> on the trade page, or "separate entries & exits" in the form — editing the size never wipes out an earlier partial.</li>
     <li><b>Initial stop</b> defines 1R; <b>current stop</b> is where it is now (trailed). Risk is shown as % of your trading capital.</li>
     <li>After the exit, pick an <b>exit reason</b> and grade the <i>process</i>, not the outcome.</li></ul>` },
   { id: 'log', title: 'Trade log & trade page', match: p => p.startsWith('/trading/trade'), body: `<p>Every trade with filters and sorting. The trade page tells the whole story: thesis, plan, executions, a timeline of your updates, and the review.</p>` },

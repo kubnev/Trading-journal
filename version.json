@@ -1,6 +1,6 @@
 {
-  "version": "0.4.0",
-  "notes": "Claude-style design, new structure, swing trading focus, daily journal section, yield accounts, net worth analytics, help & tour.",
+  "version": "0.4.1",
+  "notes": "Partial take-profits with per-exit P&L; fix: editing a partially closed trade no longer collapses it.",
   "files": [
     "css/app.css",
     "js/charts.js",

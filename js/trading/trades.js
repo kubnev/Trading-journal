@@ -61,7 +61,7 @@ export async function tradeDetail(el, [id]) {
   const cap = startingCapital(t.accountId) || startingCapital(null);
   const timeline = [
     { date: t.openDate?.slice(0, 10), text: `Opened ${t.side} ${num(t.maxPos, t.maxPos % 1 ? 4 : 0)} @ ${price(t.avgEntry)}`, kind: 'open' },
-    ...ex.filter(e => e.action !== openAct).map(e => ({ date: e.datetime?.slice(0, 10), text: `Exit ${e.qty} @ ${price(e.price)}`, kind: 'exit' })),
+    ...t.legs.map((l, i) => ({ date: l.datetime?.slice(0, 10), text: `${i === t.legs.length - 1 && t.closed ? 'Closed' : 'Partial exit'} ${num(l.qty, l.qty % 1 ? 4 : 0)} (${pct(l.pctOfPos, 0)}) @ ${price(l.price)} · ${money(l.pnl, { sign: true })}`, kind: 'exit' })),
     ...(t.updates || []).map(u => ({ date: u.date, text: [u.note, u.stop != null ? `stop → ${price(u.stop)}` : '', u.mark != null ? `price ${price(u.mark)}` : ''].filter(Boolean).join(' · '), kind: 'note' })),
   ].filter(x => x.date).sort((a, b) => a.date.localeCompare(b.date));
 
@@ -70,11 +70,11 @@ export async function tradeDetail(el, [id]) {
         <div class="row"><h1>${t.symbol}</h1>${sidePill(t.side)}${t.closed ? '' : html`<span class="pill open">OPEN</span>`}${t.grade ? html`<span class="grade" title="Grade">${t.grade}</span>` : ''}</div>
         <div class="sub">${fmtDate(t.openDate)}${t.closeDate ? ` → ${fmtDate(t.closeDate)}` : ''} · ${fmtDays(t.daysHeld)} days · ${accountName(t.accountId)} · ${assetLabel(t.assetClass)}${setup ? ` · ${setup.name}` : ''}</div>
       </div>
-      <div class="actions"><a class="btn" href="#/trading/trades">← Log</a><button class="btn danger" data-del>Delete</button>${!t.closed ? html`<button class="btn" data-upd>Update</button><button class="btn" data-close>Close position</button>` : ''}<a class="btn primary" href="#/trading/trade/${t.id}/edit">Edit</a></div></div>
+      <div class="actions"><a class="btn" href="#/trading/trades">← Log</a><button class="btn danger" data-del>Delete</button>${!t.closed ? html`<button class="btn" data-upd>Update</button><button class="btn" data-partial>Take partial profit</button><button class="btn" data-close>Close ${t.partial ? 'rest' : 'position'}</button>` : ''}<a class="btn primary" href="#/trading/trade/${t.id}/edit">Edit</a></div></div>
 
     <div class="stats big">
       ${t.closed ? stat('Net P&L', money(t.net, { sign: true }), { cls: pnlClass(t.net), sub: `gross ${money(t.gross, { sign: true })} · costs ${money(t.fees)}` })
-                 : stat('Unrealised P&L', t.unreal != null ? money(t.unreal, { sign: true }) : '—', { cls: pnlClass(t.unreal), sub: t.mark != null ? `last ${price(t.mark)}` : 'add a price with Update' })}
+                 : stat('Unrealised P&L', t.unreal != null ? money(t.unreal, { sign: true }) : '—', { cls: pnlClass(t.unreal), sub: t.partial ? html`realised so far <span class="${pnlClass(t.realizedNet)}">${money(t.realizedNet, { sign: true })}</span> (${pct(t.exitPct, 0)} closed)` : t.mark != null ? `last ${price(t.mark)}` : 'add a price with Update' })}
       ${stat(t.closed ? 'R-multiple' : 'R now', rmult(t.closed ? t.r : t.unrealR), { cls: pnlClass(t.closed ? t.r : t.unrealR), sub: t.risk ? `risked ${money(t.risk)}${cap > 0 ? ` (${pct(t.risk / cap, 2)} of capital)` : ''}` : 'set a stop to get R' })}
       ${stat('Return', pct(t.closed ? t.retPct : t.unreal != null && t.notional ? t.unreal / t.notional : null, 2), { cls: pnlClass(t.closed ? t.retPct : t.unreal), sub: `on ${money(t.notional)} position` })}
       ${stat('Held', `${fmtDays(t.daysHeld)} ${t.daysHeld != null && t.daysHeld < 2 ? 'day' : 'days'}`, { sub: t.plannedDays ? `planned ${t.plannedDays}` : '' })}
@@ -105,9 +105,15 @@ export async function tradeDetail(el, [id]) {
     <div class="grid g2 mt">
       <div class="card"><div class="card-head"><h2>Timeline</h2>${!t.closed ? html`<button class="btn sm" data-upd>+ Add update</button>` : ''}</div>
         <div class="timeline">${timeline.map(x => html`<div class="t"><span class="muted small">${fmtDate(x.date, { month: 'short', day: 'numeric' })}</span> — ${x.text}</div>`)}</div></div>
-      <div class="card"><div class="card-head"><h2>Executions</h2><span class="hint">${ex.length}</span></div>
-        <table class="data compact"><thead><tr><th>Date</th><th>Action</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Fee</th></tr></thead>
-        <tbody>${ex.map(e => html`<tr><td>${fmtDate(e.datetime)}</td><td>${e.action.toUpperCase()}</td><td class="num">${e.qty}</td><td class="num">${price(e.price)}</td><td class="num">${money(+e.fee || 0)}</td></tr>`)}</tbody></table></div>
+      <div class="card"><div class="card-head"><h2>Entries & exits</h2>${!t.closed ? html`<div class="row"><button class="btn sm" data-partial>Take partial profit</button><button class="btn sm" data-close>Close rest</button></div>` : ''}</div>
+        <div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Date</th><th></th><th class="num">Size</th><th class="num">% of pos.</th><th class="num">Price</th><th class="num">P&L</th><th class="num">R</th><th></th></tr></thead>
+        <tbody>${ex.filter(e => e.action === openAct).map(e => html`<tr><td style="white-space:nowrap">${fmtDate(e.datetime, { month: 'short', day: 'numeric' })}</td><td><span class="pill long">ENTRY</span></td><td class="num">${num(+e.qty, +e.qty % 1 ? 4 : 0)}</td><td class="num">${pct(t.maxPos ? e.qty / t.maxPos : null, 0)}</td><td class="num">${price(e.price)}</td><td></td><td></td><td></td></tr>`)}
+          ${t.legs.map((l, i) => html`<tr><td style="white-space:nowrap">${fmtDate(l.datetime, { month: 'short', day: 'numeric' })}</td><td style="white-space:nowrap" title="${l.reason || ''}"><span class="pill short">${i === t.legs.length - 1 && t.closed ? 'EXIT' : `TP ${i + 1}`}</span></td><td class="num">${num(l.qty, l.qty % 1 ? 4 : 0)}</td><td class="num">${pct(l.pctOfPos, 0)}</td><td class="num">${price(l.price)}</td><td class="num ${pnlClass(l.pnl)}">${money(l.pnl, { sign: true })}</td><td class="num ${pnlClass(l.r)}">${rmult(l.r)}</td><td style="text-align:right"><button class="btn sm ghost" data-leg="${l.id}">Edit</button></td></tr>`)}
+          ${!t.closed ? html`<tr><td colspan="2"><span class="pill open">OPEN</span></td><td class="num"><b>${num(t.openQty, t.openQty % 1 ? 4 : 0)}</b></td><td class="num">${pct(t.maxPos ? t.openQty / t.maxPos : null, 0)}</td><td class="num">${price(t.mark)}</td><td class="num ${pnlClass(t.unreal)}">${t.unreal != null ? money(t.unreal, { sign: true }) : '—'}</td><td class="num ${pnlClass(t.unrealR)}">${rmult(t.unrealR)}</td><td></td></tr>` : ''}
+        </tbody>
+        ${t.legs.length ? html`<tfoot><tr><td colspan="5">Realised${t.closed ? '' : ' so far'}</td><td class="num ${pnlClass(t.realizedNet)}">${money(t.realizedNet, { sign: true })}</td><td class="num">${t.risk ? rmult(t.realizedNet / t.risk) : ''}</td><td></td></tr></tfoot>` : ''}</table></div>
+        ${t.legs.some(l => l.ignored > 0) ? html`<p class="small neg mt">An exit is dated before the entry, so part of it is ignored — edit its date.</p>` : ''}
+      </div>
     </div>
 
     ${(t.tags || []).length + (t.mistakes || []).length + (t.emotions || []).length ? html`<div class="card mt"><div class="grid g3">
@@ -125,7 +131,9 @@ export async function tradeDetail(el, [id]) {
 
   if ((t.images || []).length) renderShots(el.querySelector('#shots'), t.images, false);
   el.querySelectorAll('[data-upd]').forEach(b => b.onclick = async () => { if (await updatePositionModal(t)) refresh(); });
-  el.querySelector('[data-close]')?.addEventListener('click', async () => { if (await closePositionModal(t)) refresh(); });
+  el.querySelectorAll('[data-close]').forEach(b => b.onclick = async () => { if (await closePositionModal(t)) refresh(); });
+  el.querySelectorAll('[data-partial]').forEach(b => b.onclick = async () => { if (await closePositionModal(t, { mode: 'partial' })) refresh(); });
+  el.querySelectorAll('[data-leg]').forEach(b => b.onclick = async () => { if (await closePositionModal(t, { mode: 'edit', leg: t.legs.find(l => l.id === b.dataset.leg) })) refresh(); });
   el.querySelector('[data-del]').onclick = async () => {
     if (!(await confirmDlg('Delete trade?', `Delete the ${t.symbol} trade from ${fmtDate(t.openDate)}? This cannot be undone.`))) return;
     for (const im of t.images || []) await store.delImage(im);
@@ -175,8 +183,11 @@ export async function tradeEdit(el, [id], { mode }) {
   const openAct = () => (form.side.value === 'short' ? 'sell' : 'buy');
   let rows = (t.executions || []).map(e => ({ ...e, date: d10(e.datetime) }));
   const entryRows = () => rows.filter(r => r.action === openAct());
-  let multi = pro && (rows.filter(r => r.action === (t.side === 'short' ? 'sell' : 'buy')).length > 1 || rows.filter(r => r.action !== (t.side === 'short' ? 'sell' : 'buy')).length > 1);
-  if (!pro && rows.length > 2) multi = true;
+  // The one-line form can only represent "one entry, one exit of the same size".
+  // Anything else (scale-ins, partial take-profits, an open remainder) uses the rows table — in both modes.
+  const oa0 = t.side === 'short' ? 'sell' : 'buy';
+  const ins = rows.filter(r => r.action === oa0), outs = rows.filter(r => r.action !== oa0);
+  let multi = ins.length > 1 || outs.length > 1 || (outs.length === 1 && Math.abs((+outs[0].qty || 0) - (+ins[0]?.qty || 0)) > 1e-9);
   let images = [...(t.images || [])];
   const newImages = [];
   const ent = rows.find(e => e.action === (t.side === 'short' ? 'sell' : 'buy')) || {};
@@ -214,10 +225,10 @@ export async function tradeEdit(el, [id], { mode }) {
           <label class="field">Exit date <span class="hint">blank = still open</span><input name="exitDate" type="date" value="${ext.date || ''}"></label>
           <label class="field">Exit price<input name="exitPrice" type="number" step="any" value="${ext.price ?? ''}"></label>
           <label class="field">Fees (total)<input name="fees" type="number" step="any" min="0" value="${(+ent.fee || 0) + (+ext.fee || 0) || ''}"></label>
-        </div>${pro ? html`<button type="button" class="btn ghost sm mt" data-multi>Scaled in or out? Use several entries / exits →</button>` : ''}</div>
+        </div><button type="button" class="btn ghost sm mt" data-multi>Partial take-profit or scaled in? Use separate entries & exits →</button></div>
         <div id="ex-multi" ${multi ? '' : raw('hidden')}>
           <div class="table-wrap"><table class="data exec-table"><thead><tr><th>Type</th><th>Date</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Fee</th><th></th></tr></thead><tbody></tbody></table></div>
-          <div class="row mt"><button type="button" class="btn sm" data-add="entry">+ Entry (scale in)</button><button type="button" class="btn sm" data-add="exit">+ Exit (scale out)</button><span class="small muted">Closes when exits equal entries.</span></div>
+          <div class="row mt"><button type="button" class="btn sm" data-add="entry">+ Entry (scale in)</button><button type="button" class="btn sm" data-add="exit">+ Exit / partial take-profit</button><span class="small muted" id="rows-sum"></span></div>
         </div>
         <div class="form-grid mt">
           <label class="field">Exit reason<select name="exitReason">${opts(EXIT_REASONS, t.exitReason)}</select></label>
@@ -271,8 +282,13 @@ export async function tradeEdit(el, [id], { mode }) {
     <td><input type="date" data-k="date" value="${r.date || ''}"></td><td><input type="number" step="any" min="0" data-k="qty" value="${r.qty ?? ''}"></td>
     <td><input type="number" step="any" data-k="price" value="${r.price ?? ''}"></td><td><input type="number" step="any" min="0" data-k="fee" value="${r.fee ?? ''}"></td>
     <td><button type="button" class="icon-btn" data-rm aria-label="Remove">✕</button></td></tr>`;
-  const drawRows = () => { if (tbody) tbody.innerHTML = String(html`${[...rows].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(rowHtml)}`); };
-  tbody?.addEventListener('input', e => { const r = rows.find(y => y.id === e.target.closest('tr').dataset.id); r[e.target.dataset.k] = e.target.value; update(); });
+  const drawRows = () => { if (tbody) tbody.innerHTML = String(html`${[...rows].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(rowHtml)}`); rowsSum(); };
+  const rowsSum = () => {
+    const el2 = el.querySelector('#rows-sum'); if (!el2) return;
+    const i = rows.filter(r => r.action === openAct()).reduce((a, r) => a + (+r.qty || 0), 0), o = rows.filter(r => r.action !== openAct()).reduce((a, r) => a + (+r.qty || 0), 0);
+    el2.innerHTML = String(html`Bought/sold <b>${num(i, i % 1 ? 4 : 0)}</b> · exited <b>${num(o, o % 1 ? 4 : 0)}</b> (${pct(i ? o / i : null, 0)}) · ${o >= i - 1e-9 && i ? 'closed' : html`<b>${num(i - o, (i - o) % 1 ? 4 : 0)}</b> still open`}`);
+  };
+  tbody?.addEventListener('input', e => { const r = rows.find(y => y.id === e.target.closest('tr').dataset.id); r[e.target.dataset.k] = e.target.value; update(); rowsSum(); });
   tbody?.addEventListener('click', e => { if (e.target.closest('[data-rm]')) { rows = rows.filter(x => x.id !== e.target.closest('tr').dataset.id); drawRows(); update(); } });
   el.querySelectorAll('[data-add]').forEach(b => b.onclick = () => {
     const isEntry = b.dataset.add === 'entry';
@@ -294,7 +310,7 @@ export async function tradeEdit(el, [id], { mode }) {
     if (hasExit && qv) out.push({ id: ext.id || store.uid(), action: openAct() === 'buy' ? 'sell' : 'buy', datetime: asDT(f.exitDate.value || f.entryDate.value || baseDay), qty: qv, price: +f.exitPrice.value, fee: fees / 2 });
     return out;
   }
-  const currentExecs = () => (multi ? rows.map(r => ({ id: r.id, action: r.action, datetime: asDT(r.date), qty: toNum(r.qty), price: toNum(r.price), fee: toNum(r.fee) || 0 })).filter(e => e.qty && e.price != null) : simpleRows());
+  const currentExecs = () => (multi ? rows.map(r => ({ id: r.id, action: r.action, datetime: r.datetime && d10(r.datetime) === r.date ? r.datetime : asDT(r.date), qty: toNum(r.qty), price: toNum(r.price), fee: toNum(r.fee) || 0, ...(r.reason ? { reason: r.reason } : {}) })).filter(e => e.qty && e.price != null) : simpleRows());
 
   const drawChecklist = () => {
     const host = el.querySelector('#checklist');

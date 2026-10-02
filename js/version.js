@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.4.1';
 
 export const CHANGELOG = [
+  ['0.4.1', 'Partial take-profits: "Take partial profit" / "Close rest" on positions and trades, size presets, stop to breakeven, per-exit P&L and R, edit or delete any exit. Editing a partially closed trade no longer collapses it into a full close.'],
   ['0.4.0', 'Claude-style design (ivory/charcoal, clay accent, serif headings). New structure: Overview, Net worth, Journal, Trading. Swing-trading focus: thesis-first trade form, open positions with live prices and portfolio heat, holding-period analysis. Daily journal with habits, open-position check-ins and insights. Net worth: fixed-yield accounts with live earnings, custody & purpose buckets, analytics and health scorecard. Help drawer and guided tour.'],
   ['0.3.0', 'Shared design language (amber accent, warm neutrals), one global Simple/Pro switch, holdings with live crypto/stock price updates, backup reminder, app update check.'],
   ['0.2.0', 'Auto colour scheme that follows your device.'],
