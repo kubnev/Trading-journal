@@ -5,7 +5,7 @@ import { exportTradesCSV, importTradesCSVDialog } from './trading/csv.js';
 import { refresh } from './main.js';
 import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
 
-import { CURRENCIES, refreshRates, currenciesInUse, otherCurrencies, ratesAt, rate, usingFallback } from './fx.js';
+import { CURRENCIES, refreshRates, currenciesInUse, otherCurrencies, ratesAt, rate, usingFallback, migrateCurrencies } from './fx.js';
 
 export default async function settingsView(el) {
   const s = store.getSettings();
@@ -188,7 +188,7 @@ export default async function settingsView(el) {
     });
     if (mode !== 'merge' && mode !== 'replace') return;
     if (mode === 'replace' && !(await confirmDlg('Replace all data?', 'Current data in this browser will be deleted and replaced by the backup.', 'Replace'))) return;
-    try { await store.importBackup(obj, { mode }); toast('Backup restored'); refresh(); }
+    try { await store.importBackup(obj, { mode }); await migrateCurrencies(); toast('Backup restored'); refresh(); refreshRates().then(r => { if (r && !r.skipped) refresh(); }).catch(() => {}); }
     catch (err) { toast(err.message, 'error'); }
   };
 }

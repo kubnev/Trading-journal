@@ -29,22 +29,26 @@ const EPS = 1e-9;
 export function computeTrade(t) {
   const dir = t.side === 'short' ? -1 : 1;
   const mult = +t.multiplier || 1;
-  const ex = [...(t.executions || [])].filter(e => +e.qty > 0 && e.price !== '' && e.price != null).sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
   const openAct = dir === 1 ? 'buy' : 'sell';
-  let entryQty = 0, entryCost = 0, exitQty = 0, exitVal = 0, fees = 0, realized = 0, pos = 0, avgCost = 0, maxPos = 0;
+  const ex = [...(t.executions || [])].filter(e => +e.qty > 0 && e.price !== '' && e.price != null)
+    // same timestamp: the entry comes before the exit (an exit can't close what isn't open yet)
+    .sort((a, b) => (a.datetime || '').localeCompare(b.datetime || '') || (a.action === openAct ? 0 : 1) - (b.action === openAct ? 0 : 1));
+  let entryQty = 0, entryCost = 0, entryFees = 0, exitQty = 0, exitVal = 0, fees = 0, realized = 0, pos = 0, avgCost = 0, maxPos = 0;
   const legs = [];   // each exit (partial take-profit or final close) with its own P&L
   for (const e of ex) {
     const q = +e.qty, p = +e.price;
     fees += +e.fee || 0;
     if (e.action === openAct) {
       avgCost = (avgCost * pos + p * q) / (pos + q);
-      pos += q; entryQty += q; entryCost += p * q;
+      pos += q; entryQty += q; entryCost += p * q; entryFees += +e.fee || 0;
       maxPos = Math.max(maxPos, pos);
     } else {
       const cq = Math.min(q, pos);
       const legPnl = (p - avgCost) * cq * dir * mult;
       realized += legPnl;
-      legs.push({ id: e.id, datetime: e.datetime, qty: cq, ignored: q - cq, price: p, fee: +e.fee || 0, pnl: legPnl - (+e.fee || 0), costBasis: avgCost, posBefore: pos, reason: e.reason || '' });
+      // each exit carries its own fee plus its share of the entry fees
+      const legFee = (+e.fee || 0) + (entryQty ? (entryFees / entryQty) * cq : 0);
+      legs.push({ id: e.id, datetime: e.datetime, qty: cq, ignored: q - cq, price: p, fee: legFee, pnl: legPnl - legFee, costBasis: avgCost, posBefore: pos, reason: e.reason || '' });
       pos -= cq; exitQty += cq; exitVal += p * cq;
     }
   }
@@ -78,7 +82,7 @@ export function computeTrade(t) {
   // share of the position each exit took, and its R contribution
   for (const l of legs) { l.pctOfPos = maxPos ? l.qty / maxPos : null; l.r = risk ? l.pnl / risk : null; }
   const partial = !closed && exitQty > 0;
-  const realizedNet = realized - legs.reduce((s2, l) => s2 + l.fee, 0);
+  const realizedNet = closed ? net : legs.reduce((s2, l) => s2 + l.pnl, 0);
   const daysHeld = openDate ? ((closed ? new Date(closeDate) : new Date()) - new Date(openDate)) / 864e5 : null;
   // Open position: mark-to-market against the last known price
   const curStop = t.currentStop === '' || t.currentStop == null ? stop : +t.currentStop;
@@ -332,6 +336,7 @@ export function monthlyTable(closed) {
 export function accountEquityAt(accountId, day) {
   const a = all('tAccounts').find(x => x.id === accountId);
   if (!a) return null;
+  if (a.startDate && day < a.startDate) return 0;   // the account didn't exist yet
   let v = +a.startingBalance || 0;
   for (const x of all('tTransfers')) if (x.accountId === accountId && x.date <= day) v += (x.type === 'withdrawal' ? -1 : 1) * (+x.amount || 0);
   // native (account currency) — the linked net-worth account converts it

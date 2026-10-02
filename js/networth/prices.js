@@ -65,6 +65,7 @@ export async function stockPricesUSD(symbols, apiKey) {
 export async function usdTo(cur) {
   cur = (cur || 'USD').toUpperCase();
   if (cur === 'USD' || cur === 'USDT') return 1;
+  if (cur === 'BGN') return (await usdTo('EUR')) * 1.95583; // fixed to the euro
   try { const j = await getJSON(`https://api.frankfurter.dev/v1/latest?base=USD&symbols=${cur}`); if (+j?.rates?.[cur] > 0) return +j.rates[cur]; } catch {}
   try { const j = await getJSON('https://api.coinbase.com/v2/exchange-rates?currency=USD'); if (+j?.data?.rates?.[cur] > 0) return +j.data.rates[cur]; } catch {}
   throw new Error(`Couldn't get the USD → ${cur} exchange rate`);

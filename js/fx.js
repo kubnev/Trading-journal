@@ -6,6 +6,10 @@ import * as store from './store.js';
 
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'BGN', 'CHF', 'JPY', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'RON', 'HUF', 'TRY', 'INR', 'SGD', 'HKD', 'CNY', 'ZAR', 'BRL', 'MXN', 'AED', 'USDT'];
 const USD_LIKE = new Set(['USD', 'USDT']);
+// Currencies the ECB publishes (Frankfurter rejects a request that names any other symbol)
+const ECB = new Set(['EUR', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'RON', 'HUF', 'TRY', 'INR', 'SGD', 'HKD', 'CNY', 'ZAR', 'BRL', 'MXN']);
+// The Bulgarian lev was fixed to the euro until it was replaced by it; derive it from EUR
+const BGN_PER_EUR = 1.95583;
 // Approximate units-per-USD, used only until real rates have been fetched once (flagged in the UI).
 const FALLBACK = { EUR: 0.92, GBP: 0.78, BGN: 1.8, CHF: 0.86, JPY: 148, CAD: 1.36, AUD: 1.5, NZD: 1.65, SEK: 10.5, NOK: 10.6, DKK: 6.85, PLN: 3.95, CZK: 23, RON: 4.6, HUF: 360, TRY: 34, INR: 84, SGD: 1.33, HKD: 7.8, CNY: 7.2, ZAR: 18, BRL: 5.4, MXN: 18.5, AED: 3.6725 };
 
@@ -25,6 +29,7 @@ function keys() {
 // units of `cur` per 1 USD on `date` (nearest earlier ECB day), else latest, else fallback
 export function rate(cur, date) {
   if (!cur || USD_LIKE.has(cur)) return 1;
+  if (cur === 'BGN') return rate('EUR', date) * BGN_PER_EUR;
   const st = fxState();
   if (date && st.history) {
     const ks = keys();
@@ -54,6 +59,7 @@ export function currenciesInUse() {
   const s = new Set([displayCcy()]);
   for (const c of ['nwAccounts', 'tAccounts', 'nwCashflow']) for (const x of store.all(c)) if (x.currency) s.add(x.currency);
   if (store.getSettings().plan?.currency) s.add(store.getSettings().plan.currency);
+  if (s.has('BGN')) { s.delete('BGN'); s.add('EUR'); }
   return [...s].filter(c => !USD_LIKE.has(c));
 }
 const earliestDate = () => {
@@ -68,34 +74,54 @@ async function getJSON(url) {
 }
 
 // Fetch latest + history for the currencies in use. Safe to call often; skips if fresh.
-export async function refreshRates({ force = false } = {}) {
+// Calls are queued so two overlapping refreshes can't overwrite each other's results.
+let queue = Promise.resolve();
+export function refreshRates(opts) {
+  const run = queue.then(() => doRefresh(opts));
+  queue = run.catch(() => {});
+  return run;
+}
+async function doRefresh({ force = false } = {}) {
   const need = currenciesInUse();
   const st = fxState();
   if (!need.length) return { ok: true, skipped: true };
   const fresh = st.at && Date.now() - new Date(st.at) < 12 * 3600e3 && need.every(c => st.latest?.[c]);
   const start = earliestDate();
   const histFrom = Object.keys(st.history || {}).sort()[0];
-  const histOk = !start || (histFrom && histFrom <= start && need.every(c => Object.values(st.history).some(r => r[c])));
+  const ecb = need.filter(c => ECB.has(c));
+  const histOk = !start || !ecb.length || (histFrom && histFrom <= start && ecb.every(c => Object.values(st.history).some(r => r[c])));
   if (fresh && histOk && !force) return { ok: true, skipped: true };
   const latest = { ...(st.latest || {}) }, history = { ...(st.history || {}) }, errors = [];
-  try {
-    const j = await getJSON(`https://api.frankfurter.dev/v1/latest?base=USD&symbols=${need.join(',')}`);
-    Object.assign(latest, j.rates || {});
+  let ecbOk = !ecb.length;
+  if (ecb.length) try {
+    const j = await getJSON(`https://api.frankfurter.dev/v1/latest?base=USD&symbols=${ecb.join(',')}`);
+    Object.assign(latest, j.rates || {}); ecbOk = true;
   } catch (e) { errors.push('ECB rates: ' + e.message); }
-  const missing = need.filter(c => !latest[c] || errors.length);
+  // non-ECB currencies always, and everything if the ECB request failed
+  const missing = need.filter(c => !ECB.has(c) || !ecbOk || !latest[c]);
   if (missing.length) {
     try { const j = await getJSON('https://api.coinbase.com/v2/exchange-rates?currency=USD'); for (const c of missing) if (+j?.data?.rates?.[c]) latest[c] = +j.data.rates[c]; }
     catch (e) { errors.push('Coinbase rates: ' + e.message); }
   }
-  if (start && (!histOk || force)) {
+  if (start && ecb.length && (!histOk || force)) {
     try {
-      const j = await getJSON(`https://api.frankfurter.dev/v1/${start}..?base=USD&symbols=${need.join(',')}`);
+      const j = await getJSON(`https://api.frankfurter.dev/v1/${start}..?base=USD&symbols=${ecb.join(',')}`);
       for (const [d, r] of Object.entries(j.rates || {})) history[d] = { ...(history[d] || {}), ...r };
     } catch (e) { errors.push('ECB history: ' + e.message); }
   }
   const ok = need.every(c => latest[c]);
   await store.saveSettings({ fx: { latest, history, at: ok ? new Date().toISOString() : st.at } });
   return { ok, errors, count: need.length };
+}
+
+// Called on every page view: fetches as soon as a new currency appears, at most once a minute
+// per set of currencies (so an offline browser doesn't retry on every click).
+let lastTry = { k: '', t: 0 };
+export async function ensureRates() {
+  const k = currenciesInUse().join(',');
+  if (k === lastTry.k && Date.now() - lastTry.t < 60e3) return { ok: true, skipped: true };
+  lastTry = { k, t: Date.now() };
+  return refreshRates();
 }
 
 // Native-currency formatter for places that show an account's own currency

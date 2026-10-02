@@ -21,9 +21,9 @@ export const DEFAULT_SETTINGS = {
   theme: 'auto',                  // 'auto' follows the OS setting
   currency: 'USD',
   locale: undefined,
-  pnlColors: 'greenred',
+  pnlColors: 'greenred',          // or 'blueorange' (colour-vision friendly)
   priceApi: { finnhubKey: '', lastUpdate: null },
-  lastBackupAt: null,          // or 'blueorange' (colour-vision friendly)
+  lastBackupAt: null,
   mode: 'simple',                 // 'simple' | 'pro' — one switch for the whole app
   tagLists: {
     tags: ['A+ setup', 'Trend day', 'Range day', 'News', 'Gap', 'High volatility', 'Low volume', 'Earnings'],

@@ -9,7 +9,7 @@ import * as T from './trading/views.js';
 import * as N from './networth/views.js';
 import * as J from './journal/views.js';
 import { openHelp, maybeStartTour } from './help.js';
-import { migrateCurrencies, refreshRates, currenciesInUse, usingFallback } from './fx.js';
+import { migrateCurrencies, refreshRates, ensureRates, currenciesInUse, usingFallback } from './fx.js';
 
 // Grouped navigation. `pro: true` items only appear in Pro mode.
 const I = {
@@ -126,9 +126,10 @@ function renderShell(path) {
 }
 
 let cleanup = null;
-let routing = false;
+let routing = false, again = false, dirty = false;
 export async function route() {
-  if (routing) return; routing = true;
+  if (routing) { again = true; return; }
+  routing = true; again = false; dirty = false;
   try {
     const path = currentPath();
     if (REDIRECTS[path]) { routing = false; location.replace('#' + REDIRECTS[path] + (location.hash.includes('?') ? '?' + location.hash.split('?')[1] : '')); return; }
@@ -153,16 +154,23 @@ export async function route() {
     window.scrollTo(0, 0);
     const h = page.querySelector('h1');
     document.title = (h ? h.textContent + ' · ' : '') + 'Journal';
+    // a newly used currency gets real exchange rates without needing a reload
+    ensureRates().then(r => { if (r && !r.skipped && r.ok) softRoute(); }).catch(() => {});
   } catch (e) {
     console.error(e);
     $('#main').innerHTML = `<div class="page"><h1>Something went wrong</h1><pre class="err">${esc(e.stack || e.message)}</pre></div>`;
-  } finally { routing = false; }
+  } finally { routing = false; if (again) route(); }
+}
+// Background re-render (rates loaded, update found): never wipe a half-filled form or an open dialog
+function softRoute() {
+  if (dirty || document.querySelector('.modal-wrap')) return false;
+  route(); return true;
 }
 
 // ---------- beta notices: backup reminder + new-version banner ----------
 let updateInfo = null;
 const dismissed = new Set();
-function notices(page) {
+function notices(page, only) {
   const s = store.getSettings();
   const own = c => store.all(c).some(x => !x.demo);
   const hasData = own('trades') || own('nwAccounts') || own('days');
@@ -172,6 +180,7 @@ function notices(page) {
   if (updateInfo?.available && !dismissed.has('update')) items.push(['update', `Version ${updateInfo.latest} is available.`, 'Load it now']);
   if (hasData && stale && !dismissed.has('backup')) items.push(['backup', s.lastBackupAt ? `Last backup was ${Math.floor((Date.now() - new Date(s.lastBackupAt)) / 864e5)} days ago. Your data only lives in this browser.` : 'You haven\'t backed up yet. Your data only lives in this browser.', 'Back up now']);
   for (const [k, text, label] of items) {
+    if (only && k !== only) continue;
     const d = document.createElement('div');
     d.className = 'notice';
     d.innerHTML = `<span>${text}</span><span class="spacer"></span><button class="btn sm primary" data-n="${k}">${label}</button><button class="btn sm ghost" data-x="${k}">Later</button>`;
@@ -199,7 +208,7 @@ async function boot() {
   }
   applyTheme();
   // In Auto mode, follow OS light/dark changes live (charts re-render with new colours)
-  darkMQ.addEventListener('change', () => { if ((store.getSettings().theme || 'auto') === 'auto') route(); });
+  darkMQ.addEventListener('change', () => { if ((store.getSettings().theme || 'auto') === 'auto') softRoute(); });
   window.addEventListener('hashchange', route);
   let rt;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (window.innerWidth < 900) document.body.classList.remove('nav-open'); }, 150); });
@@ -210,11 +219,11 @@ async function boot() {
   route();
   maybeStartTour();
   // exchange rates for multi-currency data (cached; refreshed at most twice a day)
-  refreshRates().then(r => { if (r && !r.skipped) route(); }).catch(() => {});
-  // Surface unexpected errors instead of failing silently (beta)
-  window.addEventListener('error', e => toast('Something went wrong: ' + (e.message || 'unknown error'), 'error'));
+  $('#main').addEventListener('input', () => { dirty = true; });
+  // Surface unexpected errors instead of failing silently (beta). Benign browser noise is ignored.
+  window.addEventListener('error', e => { const m = e.message || ''; if (/ResizeObserver|^Script error/.test(m)) return; toast('Something went wrong: ' + (m || 'unknown error'), 'error'); });
   window.addEventListener('unhandledrejection', e => toast('Something went wrong: ' + (e.reason?.message || e.reason || 'unknown error'), 'error'));
   // Quietly check for a newer deployed version
-  setTimeout(async () => { try { updateInfo = await checkForUpdate(); if (updateInfo.available) route(); } catch {} }, 4000);
+  setTimeout(async () => { try { updateInfo = await checkForUpdate(); if (updateInfo.available && !softRoute()) { const pg = $('#main .page'); if (pg) notices(pg, 'update'); } } catch {} }, 4000);
 }
 boot();

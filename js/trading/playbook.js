@@ -1,8 +1,8 @@
 import * as store from '../store.js';
-import { html, raw, money, pct, rmult, pnlClass, modal, toast, confirmDlg, formData, toNum, fmtDate, stat } from '../ui.js';
+import { html, raw, money, pct, rmult, pnlClass, modal, toast, confirmDlg, formData, toNum, fmtDate, stat, today } from '../ui.js';
 import { computedTrades, stats, startingCapital } from './calc.js';
 import { setFilter } from './common.js';
-import { ccySelect, displayCcy, moneyIn } from '../fx.js';
+import { ccySelect, displayCcy, moneyIn, toDisplay } from '../fx.js';
 import { DEFAULT_FILTER } from './calc.js';
 import { go, refresh } from '../main.js';
 
@@ -93,7 +93,7 @@ async function addTransfer(accountId) {
     title: 'Deposit / withdrawal',
     body: String(html`<form class="form-grid" id="xf">
       <label class="field">Type<select name="type"><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal / payout</option></select></label>
-      <label class="field">Date<input name="date" type="date" required value="${new Date().toISOString().slice(0, 10)}"></label>
+      <label class="field">Date<input name="date" type="date" required value="${today()}"></label>
       <label class="field">Amount <span class="hint">${store.get('tAccounts', accountId)?.currency || displayCcy()}</span><input name="amount" type="number" step="any" min="0" required></label>
       <label class="field">Note<input name="note"></label></form>`),
     actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => { const f = w.querySelector('#xf'); if (!(+f.amount.value > 0) || !f.date.value) { toast('Date and amount are required', 'error'); return false; } return formData(f); } }],
@@ -120,7 +120,7 @@ export async function accounts(el) {
         <div class="stats">
           ${stat('Equity', money(equity), { sub: 'start + net deposits + closed P&L' })}
           ${stat('Starting balance', moneyIn(+a.startingBalance || 0, a.currency), { sub: a.currency !== displayCcy() ? `account in ${a.currency}` : '' })}
-          ${stat('Net deposits', money(cap - (+a.startingBalance || 0), { sign: true }))}
+          ${stat('Net deposits', money(cap - toDisplay(+a.startingBalance || 0, a.currency || displayCcy(), a.startDate || undefined), { sign: true }))}
           ${stat('Closed P&L', money(st.net, { sign: true }), { cls: pnlClass(st.net), sub: `${st.n} trades` })}
           ${stat('Return on capital', cap > 0 ? pct(st.net / cap, 1) : '—', { cls: pnlClass(st.net) })}
           ${stat('Max drawdown', money(st.maxDD), { cls: st.maxDD < 0 ? 'neg' : '' })}
@@ -134,13 +134,15 @@ export async function accounts(el) {
     if (b.dataset.new !== undefined) { if (await editAccount()) refresh(); }
     else if (b.dataset.edit) { if (await editAccount(store.get('tAccounts', b.dataset.edit))) refresh(); }
     else if (b.dataset.xfer) { await addTransfer(b.dataset.xfer); refresh(); }
-    else if (b.dataset.delx) { await store.del('tTransfers', b.dataset.delx); refresh(); }
+    else if (b.dataset.delx) { if (await confirmDlg('Delete transfer?', 'Delete this deposit / withdrawal?')) { await store.del('tTransfers', b.dataset.delx); refresh(); } }
     else if (b.dataset.del) {
       const a = store.get('tAccounts', b.dataset.del);
       const n = store.all('trades').filter(t => t.accountId === a.id).length;
       if (n) { toast(`${a.name} has ${n} trades — move or delete them first`, 'error'); return; }
       if (!(await confirmDlg('Delete account?', `Delete ${a.name}?`))) return;
       await store.delWhere('tTransfers', x => x.accountId === a.id);
+      // net-worth accounts that mirrored this trading account become ordinary accounts again
+      for (const n of store.all('nwAccounts').filter(n => n.linkedTradingAccountId === a.id)) { const { linkedTradingAccountId, ...rest } = n; await store.put('nwAccounts', rest); }
       await store.del('tAccounts', a.id); refresh();
     }
   });

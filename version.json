@@ -1,6 +1,6 @@
 {
-  "version": "0.5.0",
-  "notes": "Multi-currency accounts with conversion to the display currency (ECB rates, historical).",
+  "version": "0.5.1",
+  "notes": "Full audit: bug fixes across trading, net worth, journal, currencies, CSV import and mobile layout.",
   "files": [
     "css/app.css",
     "js/charts.js",

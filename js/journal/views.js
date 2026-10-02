@@ -254,7 +254,7 @@ export async function insights(el, _p, { mode }) {
           <tr><td>Slept under 6.5h</td><td class="num">${sleepLo.length}</td><td class="num ${pnlClass(avgP(sleepLo))}">${money(avgP(sleepLo), { sign: true })}</td></tr>
         </tbody></table><p class="small muted mt">Small samples are noisy — treat this as a prompt for reflection, not a rule.</p>` : html`<p class="small muted">Journal on days you close trades to compare your state with results.</p>`}</div>
       ${pro && withTrades.length >= 3 ? html`<div class="card"><div class="card-head"><h2>Mood vs day P&L</h2></div><div class="chart"><canvas id="i-scatter"></canvas></div></div>`
-        : html`<div class="card"><div class="card-head"><h2>Recurring lessons</h2></div>${all.filter(e => e.lesson).slice(-6).reverse().map(e => html`<div class="small" style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="muted">${fmtDate(e.id, { month: 'short', day: 'numeric' })}</span> — ${e.lesson}</div>`)}</div>`}
+        : html`<div class="card"><div class="card-head"><h2>Recurring lessons</h2></div>${!all.some(e => e.lesson) ? html`<p class="small muted">Write a lesson in your daily reflection and the latest ones collect here.</p>` : ''}${all.filter(e => e.lesson).slice(-6).reverse().map(e => html`<div class="small" style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="muted">${fmtDate(e.id, { month: 'short', day: 'numeric' })}</span> — ${e.lesson}</div>`)}</div>`}
     </div>`);
 
   const p = C.palette();

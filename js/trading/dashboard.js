@@ -70,13 +70,13 @@ export async function dashboard(el, _p, { mode }) {
         ${stat('Trades / month', monthsSpan ? num(s.n / monthsSpan, 1) : '—')}
         ${stat('Total R', rmult(s.totalR, 1), { cls: pnlClass(s.totalR) })}
         ${stat('SQN', num(s.sqn), { sub: s.sqn == null ? '' : s.sqn >= 3 ? 'excellent' : s.sqn >= 2 ? 'good' : s.sqn >= 1.6 ? 'average' : 'below average', help: 'System Quality Number: √N × mean R ÷ stdev R. Needs 30+ trades to mean much.' })}
-        ${stat('Largest win / loss', `${rmult(Math.max(...closed.map(t => t.r ?? -Infinity)), 1)} / ${rmult(Math.min(...closed.map(t => t.r ?? Infinity)), 1)}`)}
+        ${stat('Largest win / loss', `${rmult(Math.max(...closed.map(t => t.r ?? -Infinity)), 1)} / ${rmult(Math.min(...closed.map(t => t.r ?? Infinity)), 1)}`, { sub: 'in R' })}
         ${stat('Plan followed', pct(s.adherence, 0), { cls: s.adherence != null && s.adherence < 0.75 ? 'neg' : '' })}
         ${stat('Portfolio heat', book.heatPct != null ? pct(book.heatPct, 1) : '—', { sub: 'open risk ÷ capital' })}
       </div>` : ''}
       <div class="grid g-2-1 mt">
         <div class="card"><div class="card-head"><h2>Equity curve</h2><span class="hint">cumulative net P&L by closed trade</span></div><div class="chart tall"><canvas id="c-eq"></canvas></div></div>
-        ${pro && ins.length ? html`<div class="card"><div class="card-head"><h2>Insights</h2><span class="hint">from filtered trades</span></div><div class="callout-list">${ins.slice(0, 6).map(i => html`<div class="callout ${i.kind}"><span class="ic">${i.kind === 'good' ? '▲' : i.kind === 'bad' ? '▼' : '!'}</span><div>${i.text}</div></div>`)}</div></div>`
+        ${pro ? html`<div class="card"><div class="card-head"><h2>Insights</h2><span class="hint">from filtered trades</span></div>${ins.length ? html`<div class="callout-list">${ins.slice(0, 6).map(i => html`<div class="callout ${i.kind}"><span class="ic">${i.kind === 'good' ? '▲' : i.kind === 'bad' ? '▼' : '!'}</span><div>${i.text}</div></div>`)}</div>` : html`<p class="small muted">${s.n < 5 ? 'Insights appear after 5 closed trades.' : 'No strong patterns yet — keep tagging setups, mistakes and exit reasons.'}</p>`}</div>`
           : html`<div class="card"><div class="card-head"><h2>Monthly P&L</h2></div><div class="chart tall"><canvas id="c-mon"></canvas></div></div>`}
       </div>
       ${pro ? html`<div class="grid g2 mt">

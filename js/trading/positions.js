@@ -107,7 +107,6 @@ export async function refreshMarks() {
   const crypto = open.filter(t => t.assetClass === 'crypto'), stocks = open.filter(t => t.assetClass === 'stock');
   const base = s => normSymbol(s).replace(/[-/]?(USDT|USDC|USD|PERP)$/, '');
   const [c, k] = await Promise.all([cryptoPricesUSD(crypto.map(t => base(t.symbol))), stockPricesUSD(stocks.map(t => t.symbol), store.getSettings().priceApi?.finnhubKey)]);
-  // Trade prices are in the instrument's own (USD) terms, so no FX conversion here
   let n = 0;
   const now = new Date().toISOString();
   for (const t of open) {
@@ -157,7 +156,7 @@ export async function positions(el, _p, { mode }) {
         <td class="num">${price(t.curStop)}${t.curStop != null ? html`<div class="dist">${pct(distPct(t.mark ?? t.avgEntry, t.curStop), 1, { sign: true })}${t.lockedIn > 0 ? ' · locked' : ''}</div>` : ''}</td>
         <td class="num">${price(t.target)}${t.target != null ? html`<div class="dist">${pct(distPct(t.mark ?? t.avgEntry, t.target), 1, { sign: true })}</div>` : ''}</td>
         ${pro ? html`<td class="num">${money(t.openRisk)}</td>` : ''}
-        <td style="white-space:nowrap;text-align:right"><button class="btn sm" data-upd="${t.id}">Update</button> <button class="btn sm" data-partial="${t.id}" title="Take partial profit">Partial</button> <button class="btn sm" data-close="${t.id}">Close</button></td>
+        <td><div class="row" style="gap:4px;justify-content:flex-end;flex-wrap:wrap;min-width:130px"><button class="btn sm" data-upd="${t.id}">Update</button><button class="btn sm" data-partial="${t.id}" title="Take partial profit">Partial</button><button class="btn sm" data-close="${t.id}">Close</button></div></td>
       </tr>`)}</tbody></table></div>
     <p class="small muted">* Prices for crypto and US stocks can be fetched automatically; others can be entered with <b>Update</b>. Unrealised P&L uses the last price; "R now" divides it by the initial risk.</p>
     ${pro ? html`<div class="grid g2 mt">

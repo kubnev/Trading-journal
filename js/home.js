@@ -77,14 +77,14 @@ export default async function home(el) {
         ${book.open.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Symbol</th><th class="num">Days</th><th class="num">Entry</th><th class="num">Last</th><th class="num">P&L</th><th class="num">R</th></tr></thead><tbody>
           ${book.open.slice(0, 8).map(t => html`<tr class="click" data-href="#/trading/trade/${t.id}"><td><b>${t.symbol}</b> <span class="pill ${t.side}">${t.side === 'short' ? 'S' : 'L'}</span></td><td class="num">${Math.round(t.daysHeld)}</td><td class="num">${price(t.avgEntry)}</td><td class="num">${price(t.mark)}</td><td class="num ${pnlClass(t.unreal)}">${t.unreal != null ? money(t.unreal, { sign: true }) : '—'}</td><td class="num ${pnlClass(t.unrealR)}">${rmult(t.unrealR)}</td></tr>`)}
         </tbody></table></div>` : html`<p class="muted small" style="padding:0 16px 16px">No open positions.</p>`}</div>
-      <div class="card"><div class="card-head"><h2>Allocation</h2></div>${cur ? html`<div class="chart"><canvas id="o-alloc"></canvas></div>` : ''}</div>
+      <div class="card"><div class="card-head"><h2>Allocation</h2></div>${cur && cur.assets > 0 ? html`<div class="chart"><canvas id="o-alloc"></canvas></div>` : html`<p class="muted small">Add net-worth accounts and update their balances to see how your money is split.</p>`}</div>
     </div>
     ${lessons.length ? html`<div class="card mt"><div class="card-head"><h2>Recent lessons</h2><a class="hint" href="#/journal/insights">Insights →</a></div>${lessons.map(d => html`<div class="small" style="padding:6px 0;border-bottom:1px solid var(--border)"><span class="muted">${fmtDate(d.id, { month: 'short', day: 'numeric' })}</span> — ${d.lesson}</div>`)}</div>` : ''}`);
 
   el.addEventListener('click', e => { const tr = e.target.closest('tr[data-href]'); if (tr) location.hash = tr.dataset.href; });
   const p = C.palette();
   if (series.length > 1) C.moneyLine(el.querySelector('#o-nw'), { labels: series.map(x => fmtDate(x.date, { month: 'short', year: '2-digit' })), series: [{ label: 'Net worth', data: series.map(x => x.net), color: p.accent, fill: true }] });
-  if (cur) {
+  if (cur && cur.assets > 0) {
     const cats = ASSET_CATS.filter(c => (cur.byCat[c.id] || 0) > 0);
     C.doughnut(el.querySelector('#o-alloc'), { labels: cats.map(c => c.label), values: cats.map(c => cur.byCat[c.id]), colors: cats.map(c => p.series[ASSET_CATS.indexOf(c) % 8]), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
   }

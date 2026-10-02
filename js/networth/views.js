@@ -300,7 +300,7 @@ async function editHoldings(a) {
       const tb = w.querySelector('#hrows');
       const draw = () => { tb.innerHTML = String(html`${rows.map(rowHtml)}`); tot(); };
       const tot = () => { w.querySelector('#htot').textContent = moneyIn(rows.reduce((s, h) => s + holdingValue(h), 0), cur); };
-      tb.addEventListener('input', e => { const tr = e.target.closest('tr'); const h = rows.find(x => x.id === tr.dataset.id); h[e.target.dataset.k] = e.target.value; tr.querySelector('[data-val]').textContent = moneyIn(holdingValue(h), cur); tot(); });
+      tb.addEventListener('input', e => { const tr = e.target.closest('tr'); const h = rows.find(x => x.id === tr.dataset.id); h[e.target.dataset.k] = e.target.value; if (e.target.dataset.k === 'price' || e.target.dataset.k === 'symbol') { delete h.priceSource; delete h.priceAt; } tr.querySelector('[data-val]').textContent = moneyIn(holdingValue(h), cur); tot(); });
       tb.addEventListener('change', e => { const tr = e.target.closest('tr'); const h = rows.find(x => x.id === tr.dataset.id); h[e.target.dataset.k] = e.target.value; });
       tb.addEventListener('click', e => { if (e.target.closest('[data-rm]')) { const id = e.target.closest('tr').dataset.id; rows = rows.filter(x => x.id !== id); draw(); } });
       w.querySelector('[data-addh]').onclick = () => { rows.push({ id: store.uid(), type: rows.at(-1)?.type || 'crypto', symbol: '', qty: '', price: '', cost: '' }); draw(); tb.querySelector('tr:last-child [data-k=symbol]').focus(); };
@@ -335,7 +335,7 @@ export async function accounts(el, _p, { mode }) {
   const sec = (title, list) => html`<div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>${title}</h2><span class="hint">${money(list.filter(a => !a.archivedAt).reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0))}</span></div>
     <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Category</th><th>Institution</th>${pro ? raw('<th>Details</th>') : ''}<th class="num">Latest balance</th><th></th></tr></thead><tbody>
     ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}</td><td>${catLabel(a.category)}</td><td>${a.institution || ''}</td>
-      ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${money(a.payment)}/mo` : ''].filter(Boolean).join(' · ') : [custodyLabel(custodyOf(a)), purposeOf(a), +a.apy ? `${a.apy}% APY` : '', isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>` : ''}
+      ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${moneyIn(+a.payment, ccyOf(a))}/mo` : ''].filter(Boolean).join(' · ') : [custodyLabel(custodyOf(a)), purposeOf(a), +a.apy ? `${a.apy}% APY` : '', isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>` : ''}
       <td class="num">${moneyIn(cur.byAcctNative[a.id] || 0, ccyOf(a))}${!sameMoney(ccyOf(a), displayCcy()) ? html`<div class="dist">≈ ${money(cur.byAcct[a.id] || 0)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
     </tbody></table></div></div>`;
@@ -456,10 +456,10 @@ export async function plan(el) {
     </div>
     <div class="grid g2 mt">
       <form class="card" id="tf"><div class="card-head"><h2>Target allocation</h2><span class="hint ${Math.abs(targetSum - 100) > 0.01 && targetSum ? 'neg' : ''}">total ${num(targetSum, 0)}%</span></div>
-        ${assetCats.length ? html`<table class="data compact"><thead><tr><th>Category</th><th class="num">Current</th><th class="num">Target %</th><th class="num">Drift</th><th class="num">To rebalance</th></tr></thead><tbody>
+        ${assetCats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Category</th><th class="num">Current</th><th class="num">Target %</th><th class="num">Drift</th><th class="num">To rebalance</th></tr></thead><tbody>
         ${assetCats.map(c => { const curPct = cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0; const tg = +pl.targetAllocation?.[c.id] || 0; const drift = tg ? curPct - tg / 100 : null; const reb = tg ? (tg / 100) * cur.assets - (cur.byCat[c.id] || 0) : null;
           return html`<tr><td><span class="dot" style="background:${catColor(c.id, C.palette())}"></span>${c.label}</td><td class="num">${pct(curPct, 1)}</td><td class="num"><input name="${c.id}" type="number" min="0" max="100" step="1" value="${tg || ''}" style="width:70px;text-align:right"></td><td class="num ${drift != null && Math.abs(drift) > 0.05 ? 'neg' : ''}">${drift == null ? '—' : pct(drift, 1, { sign: true })}</td><td class="num">${reb == null ? '—' : money(reb, { sign: true })}</td></tr>`; })}
-        </tbody></table><div class="row mt"><span class="small muted">Drift beyond ±5 points is highlighted.</span><span class="spacer"></span><button class="btn primary">Save targets</button></div>` : html`<p class="muted">Add assets first.</p>`}
+        </tbody></table></div><div class="row mt"><span class="small muted">Drift beyond ±5 points is highlighted.</span><span class="spacer"></span><button class="btn primary">Save targets</button></div>` : html`<p class="muted">Add assets first.</p>`}
       </form>
       <div class="card"><div class="card-head"><h2>Current vs target</h2></div><div class="chart"><canvas id="p-alloc"></canvas></div></div>
     </div>`);
@@ -558,9 +558,9 @@ export async function analytics(el, _p, { mode }) {
         <h3 class="mt">By purpose</h3><table class="data compact"><tbody>${purposes.map(([k, v]) => html`<tr><td>${k}</td><td class="num">${money(v)}</td><td class="num">${pct(v / cur.assets, 1)}</td></tr>`)}</tbody></table></div>
     </div>
     <div class="card mt"><div class="card-head"><h2>Balance-sheet health</h2><span class="hint">rules of thumb used by planners — context matters</span></div>
-      <table class="data"><thead><tr><th></th><th>Measure</th><th class="num">You</th><th>Guideline</th></tr></thead><tbody>
+      <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th></th><th>Measure</th><th class="num">You</th><th>Guideline</th></tr></thead><tbody>
       ${health.map(([name, v, f, judge, guide]) => html`<tr><td style="width:28px">${v == null ? html`<span class="muted">–</span>` : icon(judge(v))}</td><td>${name}</td><td class="num">${v == null ? html`<span class="muted">needs data</span>` : f(v)}</td><td class="small muted">${guide}</td></tr>`)}
-      </tbody></table></div>`);
+      </tbody></table></div></div>`);
 
   C.doughnut(body.querySelector('#a-cust'), { labels: custody.map(c => c.label), values: custody.map(c => c.v), colors: custody.map(c => p.series[CUSTODY.findIndex(x => x.id === c.id) % 8]), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
   C.doughnut(body.querySelector('#a-purp'), { labels: purposes.map(x => x[0]), values: purposes.map(x => x[1]), center: { value: String(purposes.length), label: 'buckets' } });

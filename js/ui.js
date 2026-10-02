@@ -35,7 +35,7 @@ function nf(key, opts) {
 }
 export function money(v, { sign = false, compact = false, decimals } = {}) {
   if (v == null || !isFinite(v)) return '—';
-  const cur = getSettings().currency;
+  const cur = getSettings().currency === 'USDT' ? 'USD' : getSettings().currency || 'USD';
   const d = decimals ?? (compact ? 1 : Math.abs(v) >= 1000 ? 0 : 2);
   const f = nf(`m${compact}${d}`, () => ({ style: 'currency', currency: cur, notation: compact ? 'compact' : 'standard', minimumFractionDigits: compact ? 0 : d, maximumFractionDigits: d }));
   const s = f.format(Math.abs(v));
@@ -163,7 +163,7 @@ export const empty = (title, text, action = '') => html`<div class="empty"><div 
 
 // Stat tile
 export function stat(label, value, { cls = '', sub = '', help = '' } = {}) {
-  return html`<div class="stat" ${help ? raw(`title="${esc(help)}"`) : ''}><div class="stat-label">${label}${help ? raw(' <span class="help">?</span>') : ''}</div><div class="stat-value ${cls}">${value}</div>${sub ? html`<div class="stat-sub">${raw(String(sub))}</div>` : ''}</div>`;
+  return html`<div class="stat" ${help ? raw(`title="${esc(help)}"`) : ''}><div class="stat-label">${label}${help ? raw(' <span class="help">?</span>') : ''}</div><div class="stat-value ${cls}">${value}</div>${sub ? html`<div class="stat-sub">${sub}</div>` : ''}</div>`;
 }
 
 // Simple chip-input for tags drawn from a list, allowing new entries

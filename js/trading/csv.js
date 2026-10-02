@@ -1,9 +1,11 @@
 import * as store from '../store.js';
 import { html, raw, modal, toast, download, readFileText, today, pad } from '../ui.js';
-import { computedTrades, ASSET_CLASSES, FUTURES } from './calc.js';
+import { computedTrades, ASSET_CLASSES, FUTURES, GRADES } from './calc.js';
+import { displayCcy } from '../fx.js';
 import { setupName, accountName } from './common.js';
 
 export function parseCSV(text) {
+  text = String(text || '').replace(/^\uFEFF/, '');   // Excel adds a byte-order mark
   const rows = [];
   let row = [], field = '', q = false;
   const delim = (() => { const first = text.split(/\r?\n/)[0] || ''; const c = { ',': 0, ';': 0, '\t': 0 }; for (const ch of first) if (ch in c) c[ch]++; return Object.entries(c).sort((a, b) => b[1] - a[1])[0][0]; })();
@@ -55,7 +57,13 @@ const FIELDS = [
   ['account', 'Account', false, ['account', 'account name']],
   ['tags', 'Tags (; separated)', false, ['tags', 'tag']],
   ['mistakes', 'Mistakes (; separated)', false, ['mistakes']],
-  ['notes', 'Notes', false, ['notes', 'note', 'comment', 'comments']],
+  ['thesis', 'Thesis', false, ['thesis']],
+  ['catalyst', 'Catalyst', false, ['catalyst']],
+  ['exitReason', 'Exit reason', false, ['exit_reason', 'exit reason']],
+  ['grade', 'Grade', false, ['grade']],
+  ['emotions', 'Emotions (; separated)', false, ['emotions']],
+  ['review', 'Review / notes', false, ['review', 'notes', 'note', 'comment', 'comments']],
+  ['lessons', 'Lessons', false, ['lessons', 'lesson']],
 ];
 
 function guess(headers, aliases) {
@@ -84,7 +92,19 @@ function parseDate(s, fmt) {
   return `${y}-${pad(+mo)}-${pad(+d)}T${pad(h)}:${pad(+mi)}`;
 }
 const withTime = (dt, t) => { if (!dt || !t) return dt; const m = t.trim().match(/^(\d{1,2}):(\d{2})/); return m ? `${dt.slice(0, 10)}T${pad(+m[1])}:${m[2]}` : dt; };
-const numv = s => { if (s == null) return null; const c = String(s).replace(/[$€£\s]/g, '').replace(/,(?=\d{3}\b)/g, ''); const v = parseFloat(c.replace(',', '.')); return isFinite(v) ? v : null; };
+// Numbers as brokers write them: 1,234.56 · 1.234,56 · 1234,56 · (12.50) · $1,000 · 5 000
+const numv = s => {
+  if (s == null) return null;
+  let c = String(s).trim().replace(/[$€£¥\s\u00a0']/g, '');
+  if (!c) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(c)) { neg = true; c = c.slice(1, -1); }
+  const lc = c.lastIndexOf(','), ld = c.lastIndexOf('.');
+  if (lc > -1 && ld > -1) c = lc > ld ? c.replace(/\./g, '').replace(',', '.') : c.replace(/,/g, '');   // both separators: the last one is the decimal
+  else if (lc > -1) c = /^-?\d{1,3}(,\d{3})+$/.test(c) ? c.replace(/,/g, '') : c.replace(',', '.');  // 1,234 → thousands; 12,5 → decimal
+  const v = parseFloat(c);
+  return isFinite(v) ? (neg ? -v : v) : null;
+};
 
 export async function importTradesCSVDialog() {
   const file = await new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.csv,text/csv,.txt'; i.onchange = () => res(i.files[0]); i.click(); });
@@ -112,12 +132,12 @@ export async function importTradesCSVDialog() {
   if (!res || typeof res !== 'object') return false;
 
   let accountId = res._account;
-  if (accountId === '_new' || !accountId) accountId = (await store.put('tAccounts', { name: 'Imported', type: 'margin', startingBalance: 0 })).id;
+  if (accountId === '_new' || !accountId) accountId = (await store.put('tAccounts', { name: 'Imported', type: 'margin', startingBalance: 0, currency: displayCcy() })).id;
   const col = (r, k) => (res[k] === '-1' ? '' : (r[+res[k]] ?? '').trim());
   const setupByName = new Map(store.all('setups').map(s => [s.name.toLowerCase(), s.id]));
   const acctByName = new Map(store.all('tAccounts').map(a => [a.name.toLowerCase(), a.id]));
   const out = [];
-  let skipped = 0;
+  let skipped = 0, reversed = 0;
   for (const r of data) {
     const symbol = col(r, 'symbol').toUpperCase();
     let qty = numv(col(r, 'qty'));
@@ -130,6 +150,7 @@ export async function importTradesCSVDialog() {
     qty = Math.abs(qty);
     const exit = numv(col(r, 'exit'));
     const close = withTime(parseDate(col(r, 'close'), res._datefmt), col(r, 'closeTime')) || (exit != null ? open : null);
+    if (close && close < open) { reversed++; continue; }
     const fees = Math.abs(numv(col(r, 'fees')) || 0);
     const assetRaw = col(r, 'asset').toLowerCase();
     const asset = ASSET_CLASSES.find(a => assetRaw && (assetRaw.startsWith(a.id) || a.label.toLowerCase().includes(assetRaw)))?.id || (/opt/.test(assetRaw) ? 'option' : /fut/.test(assetRaw) ? 'future' : /fx|forex|cash/.test(assetRaw) ? 'forex' : res._asset);
@@ -148,10 +169,12 @@ export async function importTradesCSVDialog() {
     const list = k => col(r, k).split(/[;|]/).map(x => x.trim()).filter(Boolean);
     out.push({
       accountId: (an && acctByName.get(an)) || accountId, symbol, assetClass: asset, side, multiplier: mult, executions,
-      stop: numv(col(r, 'stop')), target: numv(col(r, 'target')), setupId, tags: list('tags'), mistakes: list('mistakes'), emotions: [], notes: col(r, 'notes'), images: [],
+      stop: numv(col(r, 'stop')), target: numv(col(r, 'target')), setupId, tags: list('tags'), mistakes: list('mistakes'), emotions: list('emotions'), images: [],
+      thesis: col(r, 'thesis'), catalyst: col(r, 'catalyst'), exitReason: col(r, 'exitReason'), review: col(r, 'review'), lessons: col(r, 'lessons'),
+      grade: GRADES.includes(col(r, 'grade').toUpperCase()) ? col(r, 'grade').toUpperCase() : '',
     });
   }
   if (out.length) await store.putMany('trades', out);
-  toast(`Imported ${out.length} trades${skipped ? `, skipped ${skipped} incomplete rows` : ''}`, out.length ? 'info' : 'error');
+  toast(`Imported ${out.length} trades${skipped ? `, skipped ${skipped} incomplete rows` : ''}${reversed ? `, skipped ${reversed} rows whose close is before the open` : ''}`, out.length ? 'info' : 'error');
   return out.length > 0;
 }

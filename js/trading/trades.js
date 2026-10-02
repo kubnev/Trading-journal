@@ -6,6 +6,7 @@ import { filterBar, filtered, tradeRow, tradeHead, wireRowLinks, emptyTrades, se
 import { updatePositionModal, closePositionModal } from './positions.js';
 import { loadDemo } from '../demo.js';
 import { go, refresh, query } from '../main.js';
+import { displayCcy } from '../fx.js';
 
 // ================= trade log =================
 const COLS = {
@@ -225,7 +226,7 @@ export async function tradeEdit(el, [id], { mode }) {
           <label class="field">Exit date <span class="hint">blank = still open</span><input name="exitDate" type="date" value="${ext.date || ''}"></label>
           <label class="field">Exit price<input name="exitPrice" type="number" step="any" value="${ext.price ?? ''}"></label>
           <label class="field">Fees (total)<input name="fees" type="number" step="any" min="0" value="${(+ent.fee || 0) + (+ext.fee || 0) || ''}"></label>
-        </div><button type="button" class="btn ghost sm mt" data-multi>Partial take-profit or scaled in? Use separate entries & exits →</button></div>
+        </div><button type="button" class="btn ghost sm mt wrap" data-multi>Partial take-profit or scaled in? Use separate entries & exits →</button></div>
         <div id="ex-multi" ${multi ? '' : raw('hidden')}>
           <div class="table-wrap"><table class="data exec-table"><thead><tr><th>Type</th><th>Date</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Fee</th><th></th></tr></thead><tbody></tbody></table></div>
           <div class="row mt"><button type="button" class="btn sm" data-add="entry">+ Entry (scale in)</button><button type="button" class="btn sm" data-add="exit">+ Exit / partial take-profit</button><span class="small muted" id="rows-sum"></span></div>
@@ -382,11 +383,12 @@ export async function tradeEdit(el, [id], { mode }) {
     const d = draft();
     if (!d.symbol) { toast('Symbol is required', 'error'); again = false; return; }
     if (!d.executions.length) { toast('Enter at least an entry price and quantity', 'error'); again = false; return; }
+    if (d.executions.some(x => !(+x.qty > 0) || !(+x.price >= 0))) { toast('Quantities must be above zero and prices can\'t be negative', 'error'); again = false; return; }
     const c = computeTrade(d);
     const exitsGiven = d.executions.filter(x => x.action !== (d.side === 'short' ? 'sell' : 'buy')).reduce((a, x) => a + (+x.qty || 0), 0);
     if (exitsGiven > c.entryQty + 1e-9) { toast('Exits are larger than entries', 'error'); again = false; return; }
     if (exitsGiven > c.exitQty + 1e-9) { toast('An exit is dated before the entry — check the dates', 'error'); again = false; return; }
-    if (!d.accountId) d.accountId = (await store.put('tAccounts', { name: 'Main account', broker: '', type: 'margin', startingBalance: 0 })).id;
+    if (!d.accountId) d.accountId = (await store.put('tAccounts', { name: 'Main account', broker: '', type: 'margin', startingBalance: 0, currency: displayCcy() })).id;
     try { localStorage.setItem('tj.lastAccount', d.accountId); } catch {}
     for (const old of existing?.images || []) if (!images.includes(old)) await store.delImage(old);
     newImages.length = 0;
