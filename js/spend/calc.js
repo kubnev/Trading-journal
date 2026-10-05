@@ -3,6 +3,7 @@ import { all, getSettings, put, putMany } from '../store.js';
 import { toDisplay, ccyOf } from '../fx.js';
 import { today, dayKey, parseDay, pad } from '../ui.js';
 import { kindOf } from './categories.js';
+import { baseline } from '../networth/calc.js';
 
 export const val = t => toDisplay(+t.amount || 0, ccyOf(t), t.date);
 const counted = t => !t.exclude && t.date;
@@ -52,7 +53,14 @@ export function monthSummary(m = currentMonth()) {
   const due = isCur ? upcoming(m).filter(u => u.date > today() && u.date.startsWith(m) && u.type !== 'income').reduce((s, u) => s + u.value, 0) : 0;
   const recurDone = ex.filter(t => t.recurringId).reduce((s, t) => s + val(t), 0);
   const varSpent = spent - recurDone;
-  const projected = isCur ? spent + (dayNow ? (varSpent / dayNow) * (n - dayNow) : 0) + due : spent;
+  // Early in the month a few days say little, so the daily pace leans on your usual month (real
+  // average, or your starting estimate) and shifts fully to this month's own pace by day 10.
+  const base = baseline();
+  const fixedMonthly = all('recurring').filter(r => !r.paused && r.type !== 'income').reduce((a, r) => a + monthlyCost({ ...r, amount: val({ ...r, date: today() }) }), 0);
+  const usualRate = base.avgExpenses != null ? Math.max(0, base.avgExpenses - fixedMonthly) / n : null;
+  const ownRate = dayNow ? varSpent / dayNow : 0, w = usualRate == null ? 1 : Math.min(1, dayNow / 10);
+  const rate = w * ownRate + (1 - w) * (usualRate || 0);
+  const projected = isCur ? spent + rate * (n - dayNow) + due : spent;
   const b = budgetFor(m);
   const left = b.total ? b.total - spent : null;
   const daysLeft = isCur ? n - dayNow + 1 : 0;
@@ -61,7 +69,7 @@ export function monthSummary(m = currentMonth()) {
   const needs = ex.filter(t => kindOf(t) === 'need').reduce((s, t) => s + val(t), 0);
   const wants = spent - needs;
   const biggest = [...ex].sort((a, b2) => val(b2) - val(a))[0] || null;
-  return { m, spent, income, saved: income - spent, rate: income ? (income - spent) / income : null, n, dayNow, daily, noSpend, avgDay, projected, due, budget: b.total, left, safeToday, daysLeft, needs, wants, count: ex.length, biggest, ex, inc };
+  return { m, projectionUsesEstimate: isCur && w < 1 && base.estimated.spending, usualIncome: base.avgIncome, incomeIsEstimate: base.estimated.income, spent, income, saved: income - spent, rate: income ? (income - spent) / income : null, n, dayNow, daily, noSpend, avgDay, projected, due, budget: b.total, left, safeToday, daysLeft, needs, wants, count: ex.length, biggest, ex, inc };
 }
 
 // same point in the previous month, for "vs last month"

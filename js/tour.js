@@ -1,0 +1,116 @@
+// Guided tour. It walks through the real pages and highlights what matters on each. For a new user
+// (no data yet) it loads demo data first so every chart has something in it, and removes it again
+// when the tour ends — the user then starts fresh with their own starting estimates.
+import * as store from './store.js';
+import { esc } from './ui.js';
+import { loadDemo, removeDemo } from './demo.js';
+
+const STEPS = [
+  { title: 'Welcome to Ledgerline', text: 'A private tracker for <b>what you\'re worth</b> — and, second, <b>where your money goes</b>. This tour uses <b>sample data</b> so every chart has something in it; it\'s deleted when the tour ends.', demoNote: true },
+  { route: '/', sel: '[data-tour=nw-stats]', title: 'Your net worth at a glance', text: 'Net worth, how it changed over the past 12 months, what you could reach within days (liquid net worth) and your savings rate. Numbers marked <span class="tag est">estimate</span> use your starting estimates until you have a month of real data.' },
+  { route: '/', sel: '[data-tour=nw-chart]', title: 'The trend that matters', text: 'Every time you update balances, a point is added here. Monthly is the sweet spot.' },
+  { route: '/', sel: '[data-tour=fi]', title: 'Financial independence', text: 'How far your invested money is toward the amount that could cover your spending for good — and how long it takes at your current pace.' },
+  { route: '/networth/accounts', sel: '#main .page-head .actions', title: 'Accounts', text: 'Add everything you own and owe: cash, savings, trading capital, investments, things you own, debts. Each keeps its own currency. Crypto and stocks can list holdings with live prices.' },
+  { route: '/networth/update', sel: '#uf', title: 'Update balances', text: 'Once a month, type what each account is worth. Values are pre-filled with the last ones — change only what moved. Savings with a yield (APY) grow by themselves in between.' },
+  { route: '/networth', sel: '#n-line', up: '.card', title: 'Net worth over time', text: 'Assets, debts and net worth over time, with how much of each change came from saving vs markets.' },
+  { route: '/networth/analytics', sel: '[data-tour=health]', title: 'Analytics', text: 'Where your money is held (bank, broker, exchange, wallet…), what it\'s for, how liquid and concentrated it is — and a balance-sheet health check.' },
+  { route: '/networth/plan', sel: '#pf', title: 'FI planning', text: 'Set your expected return, inflation and withdrawal rate. Your spending (or your estimate) gives the FI number; the projection shows when you could get there.' },
+  { route: '/spending', sel: '#s-pace', up: '.card', title: 'Spending, month by month', text: 'Second part of the app: where money goes. Spending through the month vs last month and your budget, with a month-end projection.' },
+  { route: '/spending', sel: '.topbar [data-quick-add], [data-tour=add]', title: 'Log an expense in seconds', text: 'Amount, category, done — from any page with this button or the <kbd>N</kbd> key.' },
+  { route: '/spending/transactions', sel: '.txn-list', title: 'Transactions', text: 'Everything you logged, by day. Click to edit. You can import your bank\'s CSV export too.' },
+  { route: '/spending/calendar', sel: '.cal', title: 'Calendar', text: 'What you spent each day, income, and the bills coming up (🔁).' },
+  { route: '/spending/budgets', sel: '#bf', title: 'Budgets', text: 'A monthly limit overall and per category, with a safe amount to spend per day.' },
+  { route: '/spending/recurring', sel: '#main .tabs', title: 'Subscriptions & bills', text: 'Each subscription with the day it\'s charged and the account it comes from — added automatically, with monthly and yearly totals.' },
+  { route: '/settings', sel: '#est-card', title: 'Starting estimates', text: 'Change your estimates here any time. The app tells you when your real averages have taken over.' },
+  { route: '/settings', sel: '[data-act=export]', title: 'Back up', text: 'Your data lives only in this browser. Export a password-protected backup regularly — you\'ll get a weekly reminder.' },
+  { sel: '[data-tour=help]', title: 'Help any time', text: 'Press <b>?</b> for help about the page you\'re on. Every field has its own <b>?</b> too. That\'s it — the sample data is removed when you click Done.' },
+];
+
+let tourEl = null, step = 0, withDemo = false, token = 0;
+const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots'].some(c => store.all(c).some(x => !x.demo));
+
+export async function startTour({ demo = true } = {}) {
+  await endTour({ silent: true });
+  step = 0;
+  // sample data only when there's nothing of the user's own to show
+  withDemo = demo && !hasOwnData();
+  if (withDemo) { await loadDemo(); await store.saveSettings({ tourDemo: true }); window.dispatchEvent(new HashChangeEvent('hashchange')); await new Promise(r => setTimeout(r, 150)); }
+  tourEl = document.createElement('div');
+  tourEl.className = 'tour';
+  tourEl.innerHTML = '<div class="tour-spot"></div><div class="tour-card" role="dialog" aria-live="polite"></div>';
+  document.body.append(tourEl);
+  window.addEventListener('resize', place);
+  document.addEventListener('keydown', tourKeys);
+  show();
+}
+function tourKeys(e) { if (e.key === 'Escape') endTour(); if (e.key === 'ArrowRight') next(1); if (e.key === 'ArrowLeft') next(-1); }
+function next(d) { step += d; if (step < 0) step = 0; if (step >= STEPS.length) { endTour(); return; } show(); }
+
+const currentPath = () => location.hash.replace(/^#/, '').split('?')[0] || '/';
+async function waitFor(sel, ms = 2500) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) { const e = sel && [...document.querySelectorAll(sel)].find(x => x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('.tour')); if (e) return e; await new Promise(r => setTimeout(r, 60)); }
+  return null;
+}
+async function show() {
+  const my = ++token;
+  const s = STEPS[step];
+  const card = tourEl.querySelector('.tour-card');
+  card.innerHTML = `<div class="small muted">${step + 1} / ${STEPS.length}${withDemo ? ' · sample data' : ''}</div><h2>${esc(s.title)}</h2><p>${s.text}</p>
+    <div class="row"><button class="btn ghost sm" data-skip>${step === STEPS.length - 1 ? 'Close' : 'End tour'}</button><span class="spacer"></span>
+    ${step ? '<button class="btn sm" data-back>Back</button>' : ''}<button class="btn primary sm" data-next>${step === STEPS.length - 1 ? (withDemo ? 'Done — start fresh' : 'Done') : 'Next'}</button></div>`;
+  card.querySelector('[data-next]').onclick = () => next(1);
+  card.querySelector('[data-back]')?.addEventListener('click', () => next(-1));
+  card.querySelector('[data-skip]').onclick = () => endTour();
+  card.querySelector('[data-next]').focus();
+  if (s.route && currentPath() !== s.route) { location.hash = '#' + s.route; await new Promise(r => setTimeout(r, 250)); if (my !== token) return; }
+  const mobile = window.innerWidth <= 900;
+  document.body.classList.toggle('nav-open', mobile && !!s.sel && /\.nav /.test(s.sel));
+  let target = s.sel ? await waitFor(s.sel) : null;
+  if (my !== token || !tourEl) return;
+  if (target && s.up) target = target.closest(s.up) || target;
+  current = target;
+  if (target) target.scrollIntoView({ block: 'center', behavior: 'instant' });
+  setTimeout(place, 30);
+}
+let current = null;
+function place() {
+  if (!tourEl) return;
+  const spot = tourEl.querySelector('.tour-spot'), card = tourEl.querySelector('.tour-card');
+  // the page may have re-rendered since the step started — find the element again
+  if (current && !document.contains(current)) { const s = STEPS[step]; const e = s?.sel && [...document.querySelectorAll(s.sel)].find(x => x.getClientRects().length && !x.closest('.tour')); current = e && s.up ? e.closest(s.up) || e : e || null; }
+  const target = current;
+  const cw = Math.min(360, window.innerWidth - 24);
+  if (!target) { spot.style.cssText = 'left:50%;top:40%;width:0;height:0'; card.style.cssText = `left:50%;top:40%;transform:translate(-50%,-50%);width:${cw}px`; return; }
+  const r = target.getBoundingClientRect(), pad = 6;
+  spot.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
+  const ch = card.offsetHeight || 200;
+  let left, top;
+  if (window.innerWidth > 900 && r.right + 16 + cw < window.innerWidth - 12) { left = r.right + 16; top = r.top; }
+  else if (window.innerWidth > 900 && r.left - cw - 16 > 12) { left = r.left - cw - 16; top = r.top; }
+  else { left = Math.max(12, Math.min(window.innerWidth - cw - 12, r.left)); top = r.bottom + 14 + ch > window.innerHeight ? Math.max(12, r.top - ch - 14) : r.bottom + 14; }
+  top = Math.max(12, Math.min(top, window.innerHeight - ch - 12));
+  card.style.cssText = `left:${left}px;top:${top}px;width:${cw}px`;
+}
+export async function endTour({ silent = false } = {}) {
+  const had = !!tourEl;
+  token++;
+  tourEl?.remove(); tourEl = null; current = null;
+  document.body.classList.remove('nav-open');
+  window.removeEventListener('resize', place);
+  document.removeEventListener('keydown', tourKeys);
+  if (!had && silent) return;
+  await store.saveSettings({ tour: { done: true } });
+  if (store.getSettings().tourDemo) { await removeDemo(); await store.saveSettings({ tourDemo: false }); }
+  withDemo = false;
+  if (!silent) { if (currentPath() !== '/') location.hash = '#/'; else window.dispatchEvent(new HashChangeEvent('hashchange')); }
+}
+// Sample data left behind by a tour that never finished (tab closed mid-tour) is cleaned up on the next visit
+export async function cleanupTourDemo() {
+  if (store.getSettings().tourDemo && !tourEl) { await removeDemo(); await store.saveSettings({ tourDemo: false }); return true; }
+  return false;
+}
+export function maybeStartTour() {
+  const s = store.getSettings();
+  if (!s.tour?.done && !hasOwnData() && currentPath() !== '/setup') setTimeout(() => startTour(), 400);
+}

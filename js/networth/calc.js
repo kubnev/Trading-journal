@@ -158,19 +158,48 @@ export function cashflowMonths() {
   return [...m.values()].sort((a, b) => a.id.localeCompare(b.id)).map(c => ({ ...c, savings: c.income - c.expenses, rate: c.income ? (c.income - c.expenses) / c.income : null }));
 }
 
-// Last n months; the month in progress is left out once there's a full month of history
+// Averages over the last n months of real data: only complete calendar months after the month
+// you started logging (the first, usually partial, month and the month in progress are left out).
 export function trailing(months, n = 12) {
-  const cur = today().slice(0, 7);
-  const done = months.length > 1 && months.at(-1).id === cur ? months.slice(0, -1) : months;
-  const m = done.slice(-n);
+  const cur = today().slice(0, 7), first = months[0]?.id;
+  const m = months.filter(x => x.id < cur && x.id > first).slice(-n);
   const inc = m.reduce((a, x) => a + x.income, 0), exp = m.reduce((a, x) => a + x.expenses, 0);
   return { months: m.length, income: inc, expenses: exp, savings: inc - exp, rate: inc ? (inc - exp) / inc : null, avgExpenses: m.length ? exp / m.length : null, avgSavings: m.length ? (inc - exp) / m.length : null, avgIncome: m.length ? inc / m.length : null };
 }
 
+// ---------- starting estimates ----------
+// New users give rough monthly numbers; they're used until there's at least MIN_MONTHS complete
+// month(s) of logged transactions, then the real averages take over automatically.
+export const MIN_MONTHS = 1;
+export const estimates = () => getSettings().estimates || {};
+const estMoney = k => { const e = estimates(); return +e[k] > 0 ? toDisplay(+e[k], e.currency || 'USD') : null; };
+// trailing() shape + which parts are estimates
+export function baseline(n = 12) {
+  const t = trailing(cashflowMonths(), n);
+  const real = t.months >= MIN_MONTHS;
+  const out = { ...t, estimated: { income: false, spending: false }, realMonths: t.months };
+  const eInc = estMoney('income'), eSp = estMoney('spending'), eSave = estMoney('saving');
+  if (!real || !(t.avgIncome > 0)) {
+    if (eInc != null) { out.avgIncome = eInc; out.estimated.income = true; }
+    else if (!real) out.avgIncome = null;
+  }
+  if (!real) {
+    if (eSp != null) { out.avgExpenses = eSp; out.estimated.spending = true; } else out.avgExpenses = null;
+  }
+  if (out.estimated.income || out.estimated.spending) {
+    out.avgSavings = eSave != null && (!real || out.estimated.income) ? eSave : out.avgIncome != null && out.avgExpenses != null ? out.avgIncome - out.avgExpenses : null;
+    out.rate = out.avgIncome ? out.avgSavings / out.avgIncome : null;
+  }
+  out.isEstimate = out.estimated.income || out.estimated.spending;
+  return out;
+}
+// net worth about a year ago: real snapshot history first, otherwise the estimate
+export function yearAgoEstimate() { const e = estimates(), v = e.nwYearAgo; return v === '' || v == null || !isFinite(+v) ? null : toDisplay(+v, e.currency || 'USD'); }
+
 // ---------- financial independence ----------
 export function planInputs() {
   const pl = getSettings().plan;
-  const t = trailing(cashflowMonths());
+  const t = baseline();
   // plan amounts are stored in the currency they were typed in
   const annualExpenses = +pl.annualExpenses ? toDisplay(+pl.annualExpenses, pl.currency || 'USD') : (t.avgExpenses ? t.avgExpenses * 12 : 0);
   const monthlyContribution = +pl.monthlyContribution ? toDisplay(+pl.monthlyContribution, pl.currency || 'USD') : (t.avgSavings > 0 ? t.avgSavings : 0);

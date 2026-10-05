@@ -1,9 +1,11 @@
 # Ledgerline — spending & net worth tracker
 
-A private, local-first finance tracker that runs in the browser. It does two things:
+A private, local-first finance tracker that runs in the browser. **Net worth first**, spending second:
 
-- **Spending** — log expenses and income in seconds (button or the `N` key), see where money goes month by month, set budgets, and track bills & subscriptions.
-- **Net worth** — everything you own and owe, valued over time, with analytics and financial-independence planning.
+- **Net worth** — everything you own and owe, valued over time, with analytics, liquidity, custody, and financial-independence planning.
+- **Spending** — log expenses and income in seconds (button or the `N` key), see where money goes month by month, set budgets, and track subscriptions & bills.
+
+**First launch:** choose Simple or Pro input → give a few *starting estimates* (income, spending, saving, budget, net worth a year ago, age) → a guided tour on temporary sample data, which is deleted when the tour ends. Long-term figures use the estimates (marked "estimate") until there's a full calendar month of transactions; then real averages take over automatically.
 
 Everything is stored in the browser (IndexedDB). There is no server, no account and no tracking, and backups are password-encrypted.
 

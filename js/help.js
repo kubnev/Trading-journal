@@ -1,13 +1,14 @@
 // Help drawer (page-specific help + full guide) and a short guided tour of the app.
 import * as store from './store.js';
 import { html, raw, esc } from './ui.js';
+import { startTour } from './tour.js';
 
 const GUIDE = [
   { id: 'overview', title: 'Overview', match: p => p === '/', body: `
-    <p>Your daily home page: what you've spent this month, budget left and a safe amount per day, savings, net worth and the bills coming up.</p>
-    <ul><li><b>+ Add expense</b> (or press <kbd>N</kbd> anywhere) logs a transaction in a few seconds.</li>
-    <li>The <b>Today</b> list nudges the habits that keep the numbers accurate: log spending, update balances monthly, back up weekly.</li>
-    <li><b>Earned today from yields</b> ticks up live if you have accounts with a fixed yield (APY).</li></ul>` },
+    <p>Your daily home page, net worth first: net worth and its 12-month change, liquid net worth, savings rate, the net-worth trend, where your money sits, financial-independence progress and your safety net — then a short look at this month's spending.</p>
+    <ul><li>Numbers marked <span class="tag est">estimate</span> use your <a href="#/setup">starting estimates</a>. Once you've logged a full calendar month of transactions, your real averages replace them automatically.</li>
+    <li><b>Update balances</b> once a month — each update is a point on your net-worth history.</li>
+    <li><b>+ Expense</b> (or the <kbd>N</kbd> key) logs spending from any page.</li></ul>` },
   { id: 'spending', title: 'Spending', match: p => p === '/spending', body: `
     <p>Month-by-month view of where your money goes. Use ← → to move between months.</p>
     <ul><li><b>Spending through the month</b> — cumulative spending vs last month and your budget pace. Above the budget line = spending too fast.</li>
@@ -83,75 +84,3 @@ export function openHelp(path) {
 function escClose(e) { if (e.key === 'Escape') closeHelp(); }
 export function closeHelp() { drawer?.remove(); drawer = null; document.removeEventListener('keydown', escClose); }
 
-// ---------- tour ----------
-const STEPS = [
-  { title: 'Welcome', text: 'Ledgerline tracks two things: <b>what you spend</b> and <b>what you\'re worth</b>. Here is where everything lives.' },
-  { sel: '[data-tour=add]', title: 'Add an expense', text: 'The fastest way in: amount, category, done. Works from every page — or just press <b>N</b>.' },
-  { sel: '.nav a[href="#/spending"]', title: 'Spending', text: 'Your month at a glance: spending vs last month and budget, categories, needs vs wants, income vs spending.' },
-  { sel: '.nav a[href="#/spending/calendar"]', title: 'Calendar', text: 'What you spent each day and which bills are coming up.' },
-  { sel: '.nav a[href="#/spending/budgets"]', title: 'Budgets', text: 'Set a monthly limit and get a safe amount to spend per day.' },
-  { sel: '.nav a[href="#/spending/recurring"]', title: 'Subscriptions & bills', text: 'Your active subscriptions and bills with the day each is charged and the account it comes from — added automatically, with monthly and yearly totals.' },
-  { sel: '.nav a[href="#/networth/accounts"]', title: 'Accounts', text: 'Add your cash, savings, trading capital, investments, the things you own and any debts.' },
-  { sel: '.nav a[href="#/networth/update"]', title: 'Update balances', text: 'Once a month, record what each account is worth. Each update becomes a point on your net-worth history.' },
-  { sel: '[data-tour=settings]', title: 'Back up your data', text: 'Everything lives only in this browser. Export a password-protected backup from Settings — you\'ll get a weekly reminder.' },
-  { sel: '[data-tour=help]', title: 'Help any time', text: 'Click <b>?</b> (or press the ? key) for help about the page you\'re on. Every field also has a <b>?</b> you can hover or tap.' },
-];
-
-let tourEl = null, step = 0;
-export function startTour() {
-  endTour();
-  step = 0;
-  tourEl = document.createElement('div');
-  tourEl.className = 'tour';
-  tourEl.innerHTML = '<div class="tour-spot"></div><div class="tour-card" role="dialog" aria-live="polite"></div>';
-  document.body.append(tourEl);
-  window.addEventListener('resize', place);
-  document.addEventListener('keydown', tourKeys);
-  show();
-}
-function tourKeys(e) { if (e.key === 'Escape') endTour(); if (e.key === 'ArrowRight') next(1); if (e.key === 'ArrowLeft') next(-1); }
-function next(d) { step += d; if (step < 0) step = 0; if (step >= STEPS.length) { endTour(); return; } show(); }
-function show() {
-  const s = STEPS[step];
-  const mobile = window.innerWidth <= 900;
-  if (s.sel && mobile && !s.sel.includes('help')) document.body.classList.add('nav-open'); else document.body.classList.remove('nav-open');
-  const card = tourEl.querySelector('.tour-card');
-  card.innerHTML = `<div class="small muted">${step + 1} / ${STEPS.length}</div><h2>${esc(s.title)}</h2><p>${s.text}</p>
-    <div class="row"><button class="btn ghost sm" data-skip>${step === STEPS.length - 1 ? 'Close' : 'Skip tour'}</button><span class="spacer"></span>
-    ${step ? '<button class="btn sm" data-back>Back</button>' : ''}<button class="btn primary sm" data-next>${step === STEPS.length - 1 ? 'Done' : 'Next'}</button></div>`;
-  card.querySelector('[data-next]').onclick = () => next(1);
-  card.querySelector('[data-back]')?.addEventListener('click', () => next(-1));
-  card.querySelector('[data-skip]').onclick = endTour;
-  setTimeout(place, mobile ? 220 : 0);
-  card.querySelector('[data-next]').focus();
-}
-function place() {
-  if (!tourEl) return;
-  const s = STEPS[step];
-  const spot = tourEl.querySelector('.tour-spot'), card = tourEl.querySelector('.tour-card');
-  let target = s.sel ? [...document.querySelectorAll(s.sel)].find(e => e.offsetParent !== null) : null;
-  if (!target) { spot.style.cssText = 'left:50%;top:40%;width:0;height:0'; card.style.cssText = 'left:50%;top:40%;transform:translate(-50%,-50%)'; return; }
-  const r = target.getBoundingClientRect(), pad = 6;
-  spot.style.cssText = `left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
-  const cw = Math.min(340, window.innerWidth - 24);
-  let left = r.right + 16, top = r.top;
-  if (left + cw > window.innerWidth - 12) { left = Math.max(12, r.left - cw - 16); }
-  if (left < 12 || window.innerWidth <= 900) { left = Math.max(12, Math.min(window.innerWidth - cw - 12, r.left)); top = r.bottom + 14; }
-  top = Math.max(12, Math.min(top, window.innerHeight - 220));
-  card.style.cssText = `left:${left}px;top:${top}px;width:${cw}px`;
-}
-export async function endTour() {
-  if (!tourEl) return;
-  tourEl.remove(); tourEl = null;
-  document.body.classList.remove('nav-open');
-  window.removeEventListener('resize', place);
-  document.removeEventListener('keydown', tourKeys);
-  await store.saveSettings({ tour: { done: true } });
-}
-
-// First visit ever: offer the tour once
-export function maybeStartTour() {
-  const s = store.getSettings();
-  const empty = !store.all('txns').length && !store.all('nwAccounts').length;
-  if (!s.tour?.done && empty) setTimeout(startTour, 600);
-}

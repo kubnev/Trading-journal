@@ -10,7 +10,9 @@ import { txnModal } from './spend/txn.js';
 import { postDueRecurring } from './spend/calc.js';
 import { migrateLegacy } from './migrate.js';
 import * as N from './networth/views.js';
-import { openHelp, maybeStartTour } from './help.js';
+import { openHelp } from './help.js';
+import { maybeStartTour, cleanupTourDemo, startTour } from './tour.js';
+import { estimatesView } from './onboarding.js';
 import { exportBackupFlow } from './backup.js';
 import { initTips } from './tips.js';
 import { modeChosen, chooserView } from './mode.js';
@@ -36,6 +38,13 @@ const I = {
 };
 const NAV = [
   { group: null, items: [{ path: '/', label: 'Overview', icon: I.home }] },
+  { group: 'Net worth', items: [
+    { path: '/networth', label: 'Net worth', icon: I.grid },
+    { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
+    { path: '/networth/update', label: 'Update balances', icon: I.flow },
+    { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
+    { path: '/networth/plan', label: 'FI planning', icon: I.star },
+  ] },
   { group: 'Spending', items: [
     { path: '/spending', label: 'Spending', icon: I.chart },
     { path: '/spending/transactions', label: 'Transactions', icon: I.list },
@@ -44,14 +53,8 @@ const NAV = [
     { path: '/spending/recurring', label: 'Subscriptions & bills', icon: I.refresh },
     { path: '/spending/categories', label: 'Categories', icon: I.book },
   ] },
-  { group: 'Net worth', items: [
-    { path: '/networth', label: 'Net worth', icon: I.grid },
-    { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
-    { path: '/networth/update', label: 'Update balances', icon: I.flow },
-    { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
-    { path: '/networth/plan', label: 'FI planning', icon: I.star },
-  ] },
 ];
+const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots'].some(c => store.all(c).some(x => !x.demo));
 const ALL_ITEMS = NAV.flatMap(g => g.items);
 
 const ROUTES = [
@@ -98,7 +101,7 @@ function renderShell(path) {
   const match = ALL_ITEMS.filter(i => i.path === path || (i.path !== '/' && path.startsWith(i.path + '/'))).sort((a, b) => b.path.length - a.path.length)[0];
   $('#sidebar').innerHTML = String(html`
     <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Ledgerline</span><span class="beta">beta</span></a>
-    <button class="btn primary add-main" data-quick-add data-tour="add" title="Add an expense or income (shortcut: N)">+ Add expense</button>
+    <div class="side-actions"><a class="btn primary" href="#/networth/update" data-tour="update">Update balances</a><button class="btn" data-quick-add data-tour="add" title="Add an expense or income (shortcut: N)">+ Expense</button></div>
     <nav class="nav" data-tour="nav">${NAV.map(g => html`${g.group ? html`<div class="nav-group">${g.group}</div>` : ''}${g.items.map(i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`)}`)}</nav>
     <div class="sidebar-foot">
       <a href="#/settings" data-tour="settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
@@ -131,9 +134,15 @@ export async function route() {
     const page = document.createElement('div');
     page.className = 'page';
     main.append(page);
-    // first launch: choose Simple or Pro input before anything else
-    if (!modeChosen()) { chooserView(page, () => { route(); maybeStartTour(); }); return; }
-    if (!view) { page.innerHTML = `<h1>Not found</h1><p><a href="#/">Go home</a></p>`; return; }
+    // first launch: 1) Simple or Pro input  2) starting estimates  3) guided tour with sample data
+    if (!modeChosen()) { chooserView(page, () => { if (!hasOwnData()) location.hash = '#/setup?first=1'; route(); }); return; }
+    if (path === '/setup') {
+      const first = query().get('first') === '1';
+      estimatesView(page, { firstRun: first, onDone: async () => { if (first) { location.hash = '#/'; await startTour(); } else history.length > 1 ? history.back() : go('/settings'); } });
+      document.title = 'Starting estimates · Ledgerline';
+      return;
+    }
+    if (!view && path !== '/setup') { page.innerHTML = `<h1>Not found</h1><p><a href="#/">Go home</a></p>`; return; }
     cleanup = await view(page, params, { mode: store.getSettings().mode });
     notices(page);
     main.scrollTop = 0;
@@ -208,6 +217,7 @@ async function boot() {
   document.addEventListener('keydown', e => { if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.closest('input,textarea,select,[contenteditable]')) { e.preventDefault(); quickAdd(); } });
   // one-time conversion from the old trading-journal version, then post any bills that came due
   try { await migrateLegacy(); await migrateCurrencies(); } catch (e) { console.error(e); }
+  try { await cleanupTourDemo(); } catch (e) { console.error(e); }
   try { await postDueRecurring(); } catch (e) { console.error(e); }
   route();
   if (modeChosen()) maybeStartTour();

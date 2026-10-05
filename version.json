@@ -1,6 +1,6 @@
 {
-  "version": "1.1.1",
-  "notes": "Clearer input-mode note in the sidebar.",
+  "version": "1.2.0",
+  "notes": "Net worth first; starting estimates; guided tour on sample data.",
   "files": [
     "css/app.css",
     "js/backup.js",
@@ -17,6 +17,7 @@
     "js/networth/calc.js",
     "js/networth/prices.js",
     "js/networth/views.js",
+    "js/onboarding.js",
     "js/settings.js",
     "js/spend/calc.js",
     "js/spend/categories.js",
@@ -26,6 +27,7 @@
     "js/store.js",
     "js/theme-boot.js",
     "js/tips.js",
+    "js/tour.js",
     "js/ui.js",
     "js/version.js"
   ]

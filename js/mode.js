@@ -33,6 +33,7 @@ export const modeName = () => (store.getSettings().mode === 'pro' ? 'Pro' : 'Sim
 // First launch: a deliberate choice
 export function chooserView(el, onDone) {
   el.innerHTML = String(html`<div class="mode-choose">
+    ${!['nwAccounts', 'txns'].some(c => store.all(c).length) ? html`<div class="small muted">Step 1 of 3</div>` : ''}
     <h1>How do you want to enter your data?</h1>
     <p class="muted">Both show every chart, report and analysis. The difference is how much detail you fill in when you add an account or an expense. You can change this later in Settings.</p>
     <div class="mode-cards">${card(SIMPLE, 'simple')}${card(PRO, 'pro')}</div>

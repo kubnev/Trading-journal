@@ -170,6 +170,9 @@ export function stat(label, value, { cls = '', sub = '', help = '' } = {}) {
   return html`<div class="stat"><div class="stat-label">${label}${help ? html` <span class="tip" tabindex="0" role="button" aria-label="Help: ${help}" data-tip="${help}">?</span>` : ''}</div><div class="stat-value ${cls}">${value}</div>${sub ? html`<div class="stat-sub">${sub}</div>` : ''}</div>`;
 }
 
+// small "estimate" marker next to numbers that still use the starting estimates
+export const estTag = (on, what = 'your starting estimate') => (on ? html` <span class="tag est" title="Based on ${what} — replaced by your real average after a full month of logged transactions.">estimate</span>` : '');
+
 // Simple chip-input for tags drawn from a list, allowing new entries
 export function chipPicker(name, options, selected = []) {
   const all = [...new Set([...options, ...selected])];

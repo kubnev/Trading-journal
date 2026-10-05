@@ -47,6 +47,17 @@ const F = {
   repeat: 'Creates a bill/subscription from this transaction, so the next ones are added automatically.',
   exclude: 'Kept in the list but left out of totals, budgets and charts — e.g. something your employer will reimburse.',
 
+  // ---------- starting estimates ----------
+  'estf:currency': 'The currency you think in. Totals and charts are shown in it, and your estimates are read in it.',
+  'estf:income': 'What reaches your account in a normal month after tax. Used for your savings rate and FI planning until you’ve logged a full month of income.',
+  'estf:spending': 'Everything you spend in a normal month — rent, bills, food, fun. Used for emergency-fund months, the FI number and the early-month projection until you have a full month of transactions.',
+  'estf:saving': 'What you put aside or invest each month. Blank = income − spending. Used for the FI projection.',
+  'estf:budget': 'Optional monthly spending limit. Gives you “left in budget” and a safe amount to spend per day. Per-category limits are on Spending → Budgets.',
+  'estf:nwYearAgo': 'Optional rough net worth 12 months ago, so year-on-year growth shows something before you have a year of history.',
+  'estf:currentAge': 'Your age — the FI projection starts here.',
+  'estf:retirementAge': 'When you’d like work to become optional. Used for the Coast-FI figure.',
+  'estf:emergencyMonths': 'How many months of spending you want in cash and savings. 3–6 is the usual target.',
+
   // ---------- bills & subscriptions ----------
   'rf:name': 'What it is, e.g. Rent, Netflix, Salary.',
   'rf:kind': 'Subscription = something you signed up for (Netflix, Spotify, gym, cloud storage). Bill = rent, utilities, phone, insurance. Income = salary or other regular money in.',

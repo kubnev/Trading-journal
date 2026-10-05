@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '1.2.0';
 
 export const CHANGELOG = [
+  ['1.2.0', 'Net worth first: the menu and the Overview now lead with net worth (12-month change, liquid net worth, savings rate, trend, allocation, FI progress, safety net); spending is a compact section below. New first-launch flow: Simple/Pro → starting estimates (income, spending, saving, budget, net worth a year ago, age) → a guided tour across every page on temporary sample data that is deleted afterwards. Long-term figures use your estimates (marked “estimate”) until you have a full calendar month of transactions, then switch to real averages automatically. Estimates are editable in Settings, which can also replay the tour.'],
   ['1.1.1', 'Sidebar: the input-mode note now reads “Input mode: Simple · change” instead of a bare “Simple input”.'],
   ['1.1.0', 'Subscriptions: add each one with the day it\'s charged and the account it comes from. Active subscriptions show on the Spending page (sorted by charge day, with monthly and yearly totals) and on their own tab; bills, income and paused items have tabs too, plus a “by account” breakdown. Charges are added automatically and carry the account.'],
   ['1.0.0', 'Ledgerline: a finance-only app — spending and net worth. New Spending section: quick add (button or N), month dashboard with pace, projection, safe-to-spend, categories vs average, income vs spending, needs/wants/saved (50/30/20), calendar, budgets, bills & subscriptions (auto-added, yearly cost), editable categories, bank CSV import/export. The trading journal and daily journal moved to the archive branch; linked trading accounts became normal accounts and old monthly cash-flow totals became transactions.'],

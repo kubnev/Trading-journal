@@ -6,6 +6,8 @@ import { refresh, go } from './main.js';
 import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
 import { exportBackupFlow, importBackupFlow } from './backup.js';
 import { modeCard, switchMode } from './mode.js';
+import { estimatesForm, wireEstimatesForm, saveEstimates, estimateStatus } from './onboarding.js';
+import { startTour } from './tour.js';
 
 import { CURRENCIES, refreshRates, currenciesInUse, otherCurrencies, ratesAt, rate, usingFallback, migrateCurrencies } from './fx.js';
 
@@ -20,6 +22,10 @@ export default async function settingsView(el) {
     <div class="grid g2">
       <div class="stack">
         ${modeCard()}
+        <div class="card" id="est-card"><div class="card-head"><h2>Starting estimates</h2><span class="hint">placeholders until real data</span></div>
+          ${estimateStatus()}
+          <div class="mt">${estimatesForm({ compact: true })}</div>
+          <div class="row mt"><button class="btn sm ghost" data-act="tour">Take the tour again</button><span class="spacer"></span><button class="btn primary" data-act="est-save">Save estimates</button></div></div>
         <form class="card" id="prefs">
           <div class="card-head"><h2>Preferences</h2></div>
           <div class="form-grid">
@@ -112,6 +118,7 @@ export default async function settingsView(el) {
       </div>
     </div>`);
 
+  wireEstimatesForm(el.querySelector('#est-card'));
   el.querySelector('#prefs').onsubmit = async e => {
     e.preventDefault();
     const f = formData(e.target);
@@ -136,6 +143,8 @@ export default async function settingsView(el) {
     if (pick) { if (await switchMode(pick)) { if (pick === 'pro' && store.all('nwAccounts').length) go('/networth/accounts'); else refresh(); } return; }
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
+    if (a === 'est-save') { await saveEstimates(el.querySelector('#est-card')); toast('Starting estimates saved'); refresh(); return; }
+    if (a === 'tour') { startTour(); return; }
     if (a === 'fx') {
       const r = await refreshRates({ force: true });
       toast(r.ok ? 'Exchange rates updated' : 'Could not load rates: ' + (r.errors || []).join(' '), r.ok ? 'info' : 'error');

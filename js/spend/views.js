@@ -1,6 +1,6 @@
 // Spending: dashboard, transactions, calendar, budgets, bills & subscriptions, categories.
 import * as store from '../store.js';
-import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, modal, toast, confirmDlg, formData, toNum, parseDay, pad } from '../ui.js';
+import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, modal, toast, confirmDlg, formData, toNum, parseDay, pad, estTag } from '../ui.js';
 import * as C from '../charts.js';
 import { ccySelect, displayCcy, ccyOf, moneyIn, sameMoney } from '../fx.js';
 import { expenseCats, incomeCats, catsFor, catById, catLabel, catColor, kindOf, KINDS, saveCategories, slug, EXPENSE_DEFAULTS } from './categories.js';
@@ -54,6 +54,7 @@ export async function dashboard(el) {
   const isCur = m === S.currentMonth();
   const up = isCur ? S.upcoming(null, 14).filter(u => u.date >= today()) : [];
   const income = s.income;
+  const nwsIncome = income || (isCur ? s.usualIncome : 0), nwsEst = !income && !!nwsIncome;
   const merchants = S.byKey(s.ex, 'merchant').slice(0, 6);
   const biggest = [...s.ex].sort((a, b2) => S.val(b2) - S.val(a)).slice(0, 6);
   // everyday spending by weekday (bills left out — rent on the 1st would skew whichever weekday it fell on)
@@ -65,10 +66,10 @@ export async function dashboard(el) {
   body.innerHTML = String(html`
     <div class="stats big">
       ${stat(isCur ? 'Spent this month' : 'Spent', money(s.spent), { sub: vsPrev != null ? html`<span class="${vsPrev > 0 ? 'neg' : 'pos'}">${pct(vsPrev, 0, { sign: true })}</span> vs ${fmtMonth(prevM)}${isCur ? ' at this point' : ''}` : `${s.count} transactions` })}
-      ${stat('Income', money(income), { cls: income ? 'pos' : '', sub: s.rate != null ? html`saved <span class="${pnlClass(s.saved)}">${money(s.saved, { sign: true })}</span> (${pct(s.rate, 0)})` : 'log income to see your savings rate', help: 'Savings rate = (income − spending) ÷ income.' })}
+      ${stat('Income', money(income), { cls: income ? 'pos' : '', sub: s.rate != null ? html`saved <span class="${pnlClass(s.saved)}">${money(s.saved, { sign: true })}</span> (${pct(s.rate, 0)})` : s.usualIncome ? html`usually ${money(s.usualIncome)} / month${estTag(s.incomeIsEstimate)}` : 'log income to see your savings rate', help: 'Savings rate = (income − spending) ÷ income.' })}
       ${b.total ? stat(s.left < 0 ? 'Over budget by' : isCur ? 'Left in budget' : 'Under budget by', money(Math.abs(s.left)), { cls: s.left < 0 ? 'neg' : 'pos', sub: isCur && s.safeToday != null ? html`<b>${money(s.safeToday)}</b> safe to spend per day` : `of ${money(b.total)}`, help: 'Safe to spend per day = budget left, minus bills still due this month, divided by the days left.' })
                 : stat('Daily average', money(s.avgDay), { sub: html`<a href="#/spending/budgets">set a budget</a> to get a daily limit` })}
-      ${stat(isCur ? 'Projected month-end' : 'Daily average', isCur ? money(s.projected) : money(s.avgDay), { cls: isCur && b.total && s.projected > b.total ? 'neg' : '', sub: isCur ? (b.total ? (s.projected > b.total ? `${money(s.projected - b.total)} over budget at this pace` : 'within budget at this pace') : 'at your current pace + bills due') : `${s.noSpend} no-spend days`, help: 'Your spending so far, plus your average daily spend for the days left, plus recurring bills still due this month.' })}
+      ${stat(isCur ? html`Projected month-end${estTag(s.projectionUsesEstimate, 'your estimated monthly spending (used until day 10 of the month)')}` : 'Daily average', isCur ? money(s.projected) : money(s.avgDay), { cls: isCur && b.total && s.projected > b.total ? 'neg' : '', sub: isCur ? (b.total ? (s.projected > b.total ? `${money(s.projected - b.total)} over budget at this pace` : 'within budget at this pace') : 'at your current pace + bills due') : `${s.noSpend} no-spend days`, help: 'Your spending so far, plus your average daily spend for the days left, plus recurring bills still due this month.' })}
       ${stat('No-spend days', `${s.noSpend}`, { sub: `of ${s.dayNow || s.n} days${isCur ? ' so far' : ''}`, help: 'Days with no expenses logged. A simple streak to aim for.' })}
     </div>
     <div class="grid g-2-1 mt">
@@ -77,7 +78,7 @@ export async function dashboard(el) {
     </div>
     ${subsCard()}
     <div class="grid g2 mt">
-      <div class="card" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Categories</h2><span class="hint">${avgN ? `vs your ${avgN}-month average` : 'this month'}</span></div>
+      <div class="card" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Categories</h2><span class="hint">${avgN ? `vs your ${avgN}-month average` : 'averages appear after your first full month'}</span></div>
         ${cats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Category</th><th class="num">Spent</th><th class="num">Avg</th><th class="num">Change</th>${b.catSum ? raw('<th style="width:110px">Budget</th>') : ''}</tr></thead><tbody>
           ${cats.map(c => { const a = avg[c.id], ch = a ? (c.total - a) / a : null, bud = b.byCat[c.id]; return html`<tr class="click" data-href="#/spending/transactions?m=${m}&cat=${c.id}"><td>${catLabel(c.id)} <span class="muted small">${c.count}×</span></td><td class="num"><b>${money(c.total)}</b></td><td class="num muted">${a ? money(a) : '—'}</td><td class="num ${ch == null ? '' : ch > 0.1 ? 'neg' : ch < -0.1 ? 'pos' : ''}">${ch == null ? '—' : pct(ch, 0, { sign: true })}</td>${b.catSum ? html`<td>${bud ? html`<div class="bar-mini" title="${money(c.total)} of ${money(bud)}"><span style="width:${Math.min(100, (c.total / bud) * 100)}%" class="${c.total > bud ? 'over' : ''}"></span></div>` : html`<span class="muted small">—</span>`}</td>` : ''}</tr>`; })}
         </tbody></table></div>` : html`<p class="muted small" style="padding:0 16px 16px">Nothing yet.</p>`}</div>
@@ -85,7 +86,7 @@ export async function dashboard(el) {
     </div>
     <div class="grid g3 mt">
       <div class="card"><div class="card-head"><h2>Needs · wants · saved</h2><span class="hint">50/30/20 rule</span></div>
-        ${income ? html`${[['Needs', s.needs, 0.5, 'Rent, bills, groceries, transport…'], ['Wants', s.wants, 0.3, 'Eating out, shopping, fun…'], ['Saved', Math.max(0, s.saved), 0.2, 'Income left after spending']].map(([l, v, tgt, hint]) => html`<div class="nws"><div class="row small"><b>${l}</b><span class="muted">${hint}</span><span class="spacer"></span><b>${pct(v / income, 0)}</b><span class="muted">target ${pct(tgt, 0)}</span></div><div class="bar-mini lg"><span style="width:${Math.min(100, (v / income) * 100)}%" class="${l === 'Saved' ? (v / income >= tgt ? 'good' : 'over') : v / income > tgt ? 'over' : ''}"></span><i style="left:${tgt * 100}%"></i></div></div>`)}`
+        ${nwsIncome ? html`${nwsEst ? html`<p class="small muted" style="margin-top:0">Using your usual income of ${money(nwsIncome)}${estTag(s.incomeIsEstimate)} until this month's income is logged.</p>` : ''}${[['Needs', s.needs, 0.5, 'Rent, bills, groceries, transport…'], ['Wants', s.wants, 0.3, 'Eating out, shopping, fun…'], ['Saved', Math.max(0, nwsIncome - s.spent), 0.2, nwsEst ? 'Left so far this month' : 'Income left after spending']].map(([l, v, tgt, hint]) => html`<div class="nws"><div class="row small"><b>${l}</b><span class="muted">${hint}</span><span class="spacer"></span><b>${pct(v / nwsIncome, 0)}</b><span class="muted">target ${pct(tgt, 0)}</span></div><div class="bar-mini lg"><span style="width:${Math.min(100, (v / nwsIncome) * 100)}%" class="${l === 'Saved' ? (v / nwsIncome >= tgt ? 'good' : 'over') : v / nwsIncome > tgt ? 'over' : ''}"></span><i style="left:${tgt * 100}%"></i></div></div>`)}`
           : html`<p class="small muted">Add this month's income (salary etc.) to compare needs, wants and savings with the 50/30/20 guideline.</p><div class="chart short"><canvas id="s-nw"></canvas></div>`}
       </div>
       <div class="card"><div class="card-head"><h2>By weekday</h2><span class="hint">everyday spending, avg per day</span></div><div class="chart short"><canvas id="s-wd"></canvas></div></div>
@@ -115,7 +116,7 @@ export async function dashboard(el) {
     data: { labels: hist.map(x => fmtMonth(x.m)), datasets: [{ label: 'Income', data: hist.map(x => x.income), backgroundColor: p.pos, maxBarThickness: 18 }, { label: 'Spending', data: hist.map(x => x.spent), backgroundColor: p.series[1], maxBarThickness: 18 }] },
     options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}`, footer: it => { const x = hist[it[0].dataIndex]; return x.income ? `Saved ${money(x.saved, { sign: true })} (${pct(x.rate, 0)})` : ''; } } } }, scales: { x: C.plainAxis({ ticks: { maxRotation: 0, autoSkipPadding: 6 } }), y: C.moneyAxis() } },
   });
-  if (!income && body.querySelector('#s-nw')) C.plainBars(body.querySelector('#s-nw'), { labels: ['Needs', 'Wants'], values: [s.needs, s.wants], colors: [p.series[0], p.series[1]], fmt: v => money(v, { compact: true }), horizontal: true, label: 'Spent' });
+  if (!nwsIncome && body.querySelector('#s-nw')) C.plainBars(body.querySelector('#s-nw'), { labels: ['Needs', 'Wants'], values: [s.needs, s.wants], colors: [p.series[0], p.series[1]], fmt: v => money(v, { compact: true }), horizontal: true, label: 'Spent' });
   C.plainBars(body.querySelector('#s-wd'), { labels: DOW, values: wd.map((v, i) => (wdN[i] ? v / wdN[i] : 0)), fmt: v => money(v, { compact: true }), label: 'Avg spend' });
 }
 

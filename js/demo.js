@@ -13,6 +13,7 @@ export const hasDemo = () => COLS.some(c => store.all(c).some(x => x.demo));
 export async function removeDemo() {
   for (const c of COLS) await store.delWhere(c, x => x.demo);
   if (store.getSettings().demoBudgets) { await store.saveSettings({ budgets: null }); await store.saveSettings({ budgets: { total: 0, byCat: {} }, demoBudgets: false }); }
+  if (store.getSettings().demoTargets) { await store.saveSettings({ plan: { targetAllocation: null } }); await store.saveSettings({ plan: { targetAllocation: {} }, demoTargets: false }); }
 }
 
 export async function loadDemo() {
@@ -146,8 +147,7 @@ export async function loadDemo() {
   await store.putMany('recurring', bills.map(b => ({ ...b, accountId: b.category === 'subscriptions' && b.method === 'Credit card' ? nw.cc.id : nw.checking.id })));
   await store.putMany('txns', txns.filter(t => t.recurringId).map(t => ({ ...t, accountId: store.get('recurring', t.recurringId)?.accountId || '' })));
   await store.putMany('nwSnapshots', snaps.filter(s => !store.all('nwSnapshots').some(x => x.date === s.date)));
+  // a sample target allocation (never touches your own plan answers); removed with the demo
   const pl = store.getSettings().plan;
-  if (!Object.keys(pl.targetAllocation || {}).length) {
-    await store.saveSettings({ plan: { currentAge: 31, retirementAge: 50, targetAllocation: { cash: 3, savings: 10, brokerage: 25, trading: 12, retirement: 10, crypto: 10, realestate: 28, vehicle: 2 } } });
-  }
+  if (!Object.keys(pl.targetAllocation || {}).length) await store.saveSettings({ plan: { targetAllocation: { cash: 3, savings: 10, brokerage: 25, trading: 12, retirement: 10, crypto: 10, realestate: 28, vehicle: 2 } }, demoTargets: true });
 }

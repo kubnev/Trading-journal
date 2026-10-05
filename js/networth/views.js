@@ -1,7 +1,7 @@
 import * as store from '../store.js';
-import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, modal, toast, confirmDlg, formData, toNum, monthKey, parseDay, dayKey } from '../ui.js';
+import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, modal, toast, confirmDlg, formData, toNum, monthKey, parseDay, dayKey, estTag } from '../ui.js';
 import * as C from '../charts.js';
-import { ASSET_CATS, LIAB_CATS, catLabel, assetCats, liabCats, GROUPS, DEBT, groupOf, groupInfo, simpleMode, typeLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, fiMetrics, projection, changeDecomposition, debtMetrics, CUSTODY, custodyOf, custodyLabel, PURPOSES, purposeOf, TIERS, yieldSummary, liveValue, positions, concentration } from './calc.js';
+import { ASSET_CATS, LIAB_CATS, catLabel, assetCats, liabCats, GROUPS, DEBT, groupOf, groupInfo, simpleMode, typeLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, baseline, yearAgoEstimate, fiMetrics, projection, changeDecomposition, debtMetrics, CUSTODY, custodyOf, custodyLabel, PURPOSES, purposeOf, TIERS, yieldSummary, liveValue, positions, concentration } from './calc.js';
 import { loadDemo } from '../demo.js';
 import { toDisplay, ccyOf, moneyIn, ccySelect, displayCcy, sameMoney } from '../fx.js';
 import { updateAllPrices, summaryText, holdingsTotal, holdingValue, syncHoldingsSnapshot, normSymbol } from './prices.js';
@@ -84,7 +84,9 @@ export async function overview(el, _p, { mode }) {
     const ch = prev ? cur.net - prev.net : null;
     const chRange = first && first !== cur ? cur.net - first.net : null;
     const fi = fiMetrics(cur.investable);
-    const t12 = trailing(cashflowMonths());
+    const t12 = baseline();
+    const yaEst = !yearAgo ? yearAgoEstimate() : null;
+    const yoy = yearAgo ? cur.net - yearAgo.net : yaEst != null ? cur.net - yaEst : null, yoyBase = yearAgo ? yearAgo.net : yaEst;
     const debt = debtMetrics(cur);
     const efMonths = t12.avgExpenses ? ((cur.byCat.cash || 0) + (cur.byCat.savings || 0)) / t12.avgExpenses : null;
     const p = C.palette();
@@ -104,11 +106,11 @@ export async function overview(el, _p, { mode }) {
       ${yieldCard() ? html`<div class="mt">${yieldCard()}</div>` : ''}
       ${pro ? html`<div class="stats mt">
         ${stat('Liquid net worth', money(cur.liquidNet), { cls: pnlClass(cur.liquidNet), sub: 'liquid assets − all debts', help: 'Liquid assets (cash, savings, brokerage, crypto, trading) minus all liabilities — what you could access in days.' })}
-        ${stat('YoY change', yearAgo ? money(cur.net - yearAgo.net, { sign: true }) : '—', { cls: yearAgo ? pnlClass(cur.net - yearAgo.net) : '', sub: yearAgo && yearAgo.net > 0 ? pct((cur.net - yearAgo.net) / yearAgo.net, 1, { sign: true }) : '' })}
+        ${stat(html`YoY change${estTag(!yearAgo && yaEst != null, 'the net worth you estimated for a year ago')}`, yoy != null ? money(yoy, { sign: true }) : '—', { cls: pnlClass(yoy), sub: yoyBase > 0 ? pct(yoy / yoyBase, 1, { sign: true }) : !yearAgo && yaEst == null ? 'after a year of history' : '' })}
         ${stat('Debt-to-asset', pct(cur.assets ? cur.liabilities / cur.assets : null, 1), { cls: cur.assets && cur.liabilities / cur.assets > 0.5 ? 'neg' : '', help: 'Liabilities ÷ assets. Above 50% leaves you exposed to downturns.' })}
-        ${stat('Emergency fund', efMonths != null ? `${num(efMonths, 1)} mo` : '—', { cls: efMonths != null && efMonths < 3 ? 'neg' : '', sub: 'cash ÷ avg monthly expenses', help: 'Cash & savings divided by average monthly expenses (from Cash flow). 3–6 months is the usual target.' })}
-        ${stat('Savings rate (12m)', pct(t12.rate, 1), { cls: pnlClass(t12.rate), help: '(Income − expenses) ÷ income over the last 12 logged months.' })}
-        ${stat('FI progress', pct(fi.progress, 1), { sub: fi.fiNumber ? `of ${money(fi.fiNumber, { compact: true })}` : 'set expenses in FI planning', help: 'Investable assets ÷ FI number (annual expenses ÷ withdrawal rate).' })}
+        ${stat(html`Emergency fund${estTag(t12.estimated.spending)}`, efMonths != null ? `${num(efMonths, 1)} mo` : '—', { cls: efMonths != null && efMonths < 3 ? 'neg' : '', sub: 'cash ÷ avg monthly spending', help: 'Cash & savings divided by your average monthly spending (from Spending). 3–6 months is the usual target.' })}
+        ${stat(html`Savings rate${estTag(t12.isEstimate)}`, pct(t12.rate, 1), { cls: pnlClass(t12.rate), sub: t12.isEstimate ? 'from your estimates' : `last ${t12.realMonths} full month${t12.realMonths === 1 ? '' : 's'}`, help: '(Income − spending) ÷ income, over your last 12 complete months of transactions.' })}
+        ${stat(html`FI progress${estTag(fi.derivedExpenses && t12.estimated.spending)}`, pct(fi.progress, 1), { sub: fi.fiNumber ? `of ${money(fi.fiNumber, { compact: true })}` : 'set expenses in FI planning', help: 'Investable assets ÷ FI number (annual expenses ÷ withdrawal rate).' })}
       </div>` : ''}
       <div class="grid g-2-1 mt">
         <div class="card"><div class="card-head"><h2>Net worth over time</h2><span class="hint">${pro ? 'net worth, assets & liabilities' : ''}</span></div><div class="chart tall"><canvas id="n-line"></canvas></div></div>
@@ -449,8 +451,8 @@ export async function plan(el) {
       <form class="card" id="pf"><div class="card-head"><h2>Assumptions</h2></div><div class="form-grid" style="grid-template-columns:1fr 1fr">
         <label class="field">Current age<input name="currentAge" type="number" min="0" max="120" value="${pl.currentAge}"></label>
         <label class="field">Target retirement age<input name="retirementAge" type="number" min="0" max="120" value="${pl.retirementAge}"></label>
-        <label class="field full">Annual expenses in retirement <span class="hint">${fi.derivedExpenses ? `blank = from cash flow (${money(fi.annualExpenses)})` : ''}</span><input name="annualExpenses" type="number" step="any" min="0" value="${+pl.annualExpenses ? Math.round(toDisplay(+pl.annualExpenses, pl.currency || displayCcy())) : ''}"></label>
-        <label class="field full">Monthly investing <span class="hint">${fi.derivedContribution ? `blank = avg savings (${money(fi.monthlyContribution)})` : ''}</span><input name="monthlyContribution" type="number" step="any" min="0" value="${+pl.monthlyContribution ? Math.round(toDisplay(+pl.monthlyContribution, pl.currency || displayCcy())) : ''}"></label>
+        <label class="field full">Annual expenses in retirement <span class="hint">${fi.derivedExpenses ? `blank = ${fi.trailing.estimated.spending ? 'your estimate' : 'your spending'} × 12 (${money(fi.annualExpenses)})` : ''}</span><input name="annualExpenses" type="number" step="any" min="0" value="${+pl.annualExpenses ? Math.round(toDisplay(+pl.annualExpenses, pl.currency || displayCcy())) : ''}"></label>
+        <label class="field full">Monthly investing <span class="hint">${fi.derivedContribution ? `blank = ${fi.trailing.isEstimate ? 'your estimate' : 'avg income − spending'} (${money(fi.monthlyContribution)})` : ''}</span><input name="monthlyContribution" type="number" step="any" min="0" value="${+pl.monthlyContribution ? Math.round(toDisplay(+pl.monthlyContribution, pl.currency || displayCcy())) : ''}"></label>
         <label class="field">Withdrawal rate %<input name="withdrawalRate" type="number" step="0.1" min="0.5" max="10" value="${pl.withdrawalRate}"></label>
         <label class="field">Expected return %<input name="expectedReturn" type="number" step="0.1" value="${pl.expectedReturn}"></label>
         <label class="field">Inflation %<input name="inflation" type="number" step="0.1" value="${pl.inflation}"></label>
@@ -508,7 +510,7 @@ export async function analytics(el, _p, { mode }) {
   if (!series.length) { body.innerHTML = String(emptyNW()); wireDemo(body); return; }
   const cur = series.at(-1);
   const p = C.palette();
-  const t12 = trailing(cashflowMonths());
+  const t12 = baseline();
   const y = yieldSummary();
   const pos = positions(cur, { investableOnly: true });
   const conc = concentration(pos);
@@ -526,12 +528,12 @@ export async function analytics(el, _p, { mode }) {
   const yrs = series.length > 1 ? (parseDay(cur.date) - parseDay(series[0].date)) / (365.25 * 864e5) : 0;
   const cagr = yrs >= 1 && series[0].net > 0 && cur.net > 0 ? Math.pow(cur.net / series[0].net, 1 / yrs) - 1 : null;
   const health = [
-    ['Emergency fund', t12.avgExpenses ? cash / t12.avgExpenses : null, v => `${num(v, 1)} months`, v => v >= 6 ? 'good' : v >= 3 ? 'ok' : 'bad', '3–6+ months of expenses in cash'],
-    ['Savings rate (12m)', t12.rate, v => pct(v, 1), v => v >= 0.2 ? 'good' : v >= 0.1 ? 'ok' : 'bad', '20%+ of take-home pay'],
+    [html`Emergency fund${estTag(t12.estimated.spending)}`, t12.avgExpenses ? cash / t12.avgExpenses : null, v => `${num(v, 1)} months`, v => v >= 6 ? 'good' : v >= 3 ? 'ok' : 'bad', '3–6+ months of expenses in cash'],
+    [html`Savings rate${estTag(t12.isEstimate)}`, t12.rate, v => pct(v, 1), v => v >= 0.2 ? 'good' : v >= 0.1 ? 'ok' : 'bad', '20%+ of take-home pay'],
     ['Debt-to-asset', cur.assets ? cur.liabilities / cur.assets : null, v => pct(v, 1), v => v <= 0.3 ? 'good' : v <= 0.5 ? 'ok' : 'bad', 'under 50%, ideally under 30%'],
     ['Solvency (net worth ÷ assets)', cur.assets ? cur.net / cur.assets : null, v => pct(v, 1), v => v >= 0.5 ? 'good' : v >= 0.2 ? 'ok' : 'bad', 'above 50%'],
     ['Investable share of net worth', cur.net > 0 ? cur.investable / cur.net : null, v => pct(v, 0), v => v >= 0.5 ? 'good' : v >= 0.25 ? 'ok' : 'bad', '25%+, rising over time (50%+ is strong)'],
-    ['Passive income coverage', annualExp ? y.perYear / annualExp : null, v => pct(v, 1), v => v >= 1 ? 'good' : v >= 0.25 ? 'ok' : 'bad', 'yield income ÷ annual expenses (100% = covered)'],
+    [html`Passive income coverage${estTag(t12.estimated.spending)}`, annualExp ? y.perYear / annualExp : null, v => pct(v, 1), v => v >= 1 ? 'good' : v >= 0.25 ? 'ok' : 'bad', 'yield income ÷ annual expenses (100% = covered)'],
     ['Largest investment position', conc.top1, v => `${pct(v, 1)} · ${pos[0]?.label}`, v => v <= 0.2 ? 'good' : v <= 0.35 ? 'ok' : 'bad', 'under ~20% of investable assets'],
     ['Largest custodian type', finCust(custody).length ? finCust(custody)[0].v / finCust(custody).reduce((a, c) => a + c.v, 0) : null, v => `${pct(v, 0)} · ${finCust(custody)[0]?.label}`, v => v <= 0.5 ? 'good' : v <= 0.7 ? 'ok' : 'bad', 'share of financial assets with one type of custodian'],
     ['On crypto exchanges', cur.assets ? (cur.byCustody.cex || 0) / cur.assets : null, v => pct(v, 1), v => v <= 0.1 ? 'good' : v <= 0.25 ? 'ok' : 'bad', 'exchange balances carry counterparty risk'],
@@ -560,7 +562,7 @@ export async function analytics(el, _p, { mode }) {
       <div class="card"><div class="card-head"><h2>By custody</h2></div><table class="data compact"><tbody>${custody.map(c => html`<tr><td>${c.label}</td><td class="num">${money(c.v)}</td><td class="num">${pct(c.v / cur.assets, 1)}</td></tr>`)}</tbody></table>
         <h3 class="mt">By purpose</h3><table class="data compact"><tbody>${purposes.map(([k, v]) => html`<tr><td>${k}</td><td class="num">${money(v)}</td><td class="num">${pct(v / cur.assets, 1)}</td></tr>`)}</tbody></table></div>
     </div>
-    <div class="card mt"><div class="card-head"><h2>Balance-sheet health</h2><span class="hint">rules of thumb used by planners — context matters</span></div>
+    <div class="card mt" data-tour="health"><div class="card-head"><h2>Balance-sheet health</h2><span class="hint">rules of thumb used by planners — context matters</span></div>
       <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th></th><th>Measure</th><th class="num">You</th><th>Guideline</th></tr></thead><tbody>
       ${health.map(([name, v, f, judge, guide]) => html`<tr><td style="width:28px">${v == null ? html`<span class="muted">–</span>` : icon(judge(v))}</td><td>${name}</td><td class="num">${v == null ? html`<span class="muted">needs data</span>` : f(v)}</td><td class="small muted">${guide}</td></tr>`)}
       </tbody></table></div></div>`);
