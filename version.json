@@ -1,6 +1,6 @@
 {
-  "version": "0.6.1",
-  "notes": "Help tooltips on every field and table header.",
+  "version": "0.6.2",
+  "notes": "Purpose field is a dropdown.",
   "files": [
     "css/app.css",
     "js/backup.js",

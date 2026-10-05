@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '0.6.1';
+export const APP_VERSION = '0.6.2';
 
 export const CHANGELOG = [
+  ['0.6.2', 'Purpose / bucket is now a normal dropdown like the other fields (Auto, the standard buckets, any you created, or “Other” to type your own).'],
   ['0.6.1', 'Help everywhere: a “?” next to every form field and jargon table header explains it in a line or two — hover, tap or tab to it. Works in dialogs and on phones.'],
   ['0.6.0', 'Password-protected backups: exports are encrypted (AES-256-GCM, key from your password via PBKDF2 with 600,000 rounds) and restoring asks for the password. Restores check the whole file before touching your data and ignore unknown or invalid settings. "Delete all data" also removes settings and the API key. Content-Security-Policy: only the app\'s own code can run and it can only talk to the price and exchange-rate services. Enter now confirms dialogs.'],
   ['0.5.1', 'Full audit and fixes: partial exits now carry their share of entry fees (exits add up to the trade\'s net), same-time entry/exit ordering, exchange rates load as soon as a new currency is used, non-ECB currencies (AED) and BGN handled, USDT display currency, restoring a backup tags old records with a currency, typing is no longer wiped by background refreshes, CSV import reads European numbers, BOM, thesis/grade/review/lessons columns and skips rows closing before they open, deleting a trading account unlinks mirrored net-worth accounts, mobile layout overflow fixes, and smaller fixes across every page.'],

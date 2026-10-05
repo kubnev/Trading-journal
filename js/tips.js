@@ -14,7 +14,7 @@ const F = {
   rate: 'Yearly interest rate on the debt. Used for the weighted average rate and to prioritise payoff.',
   payment: 'Your regular monthly payment on this debt, in the account’s currency.',
   custody: 'Who actually holds the money — bank, broker, crypto exchange, your own wallet… Used to show counterparty risk in Analytics.',
-  purpose: 'What this money is for (emergency fund, retirement, house deposit…). Pick one or type your own. Shown as buckets in Analytics.',
+  purpose: 'What this money is for (emergency fund, retirement, house deposit…). Auto picks one from the category; choose “Other” to name your own. Shown as buckets in Analytics.',
   apy: 'Fixed yearly yield (APY). The balance grows a little every day from your last update, and the earnings ticker counts it live. Leave blank if it doesn’t earn a fixed rate.',
   liquid: 'Could you turn it into cash within a few days without a big loss? Yes for cash, savings, stocks, crypto; no for a house, car or locked pension. Auto decides by category.',
   investable: 'Does it count toward financial independence (FI)? Yes for invested money that grows and could fund retirement; no for spending cash, your home or a car. Drives FI progress and projections.',

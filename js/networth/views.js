@@ -223,6 +223,8 @@ export async function update(el) {
 }
 
 // ================= accounts =================
+// the standard buckets plus any custom ones already used on other accounts
+const purposeChoices = a => [...new Set([...PURPOSES, ...store.all('nwAccounts').map(x => (x.purpose || '').trim()).filter(Boolean), ...(a.purpose ? [a.purpose] : [])])];
 async function editAccount(a = { kind: 'asset', category: 'cash' }) {
   const tAccts = store.all('tAccounts');
   const catOpts = kind => (kind === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}" ${a.category === c.id ? raw('selected') : ''}>${c.label}</option>`);
@@ -241,7 +243,7 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
       </div>
       <div class="ast full form-grid" style="padding:0">
         <label class="field">Held at<select name="custody">${CUSTODY.map(c => html`<option value="${c.id}" ${custodyOf(a) === c.id ? raw('selected') : ''}>${c.label}</option>`)}</select></label>
-        <label class="field">Purpose / bucket<input name="purpose" value="${a.purpose || ''}" placeholder="${purposeOf({ ...a, purpose: '' })}" list="purposes"><datalist id="purposes">${PURPOSES.map(p => html`<option>${p}</option>`)}</datalist></label>
+        <label class="field">Purpose / bucket<select name="purpose"><option value="">Auto (${purposeOf({ category: a.category || 'cash' })})</option>${purposeChoices(a).map(p => html`<option ${a.purpose === p ? raw('selected') : ''}>${p}</option>`)}<option value="__custom">Other — type your own…</option></select><input name="purposeOther" placeholder="e.g. Wedding fund" maxlength="40" hidden style="margin-top:6px"></label>
         <label class="field">Fixed yield (APY %) <span class="hint">savings, money market, staking</span><input name="apy" type="number" step="any" min="0" max="100" value="${a.apy ?? ''}" placeholder="e.g. 4.2"></label>
         <label class="field">Liquid?<select name="liquid"><option value="">Auto (by category)</option><option value="yes" ${a.liquid === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.liquid === false ? raw('selected') : ''}>No</option></select></label>
         <label class="field">Counts toward financial independence? <span class="hint">invested money that grows and could fund retirement</span><select name="investable"><option value="">Auto (by category)</option><option value="yes" ${a.investable === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.investable === false ? raw('selected') : ''}>No</option></select></label>
@@ -252,19 +254,21 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
     </form>`),
     onMount: w => {
       const f = w.querySelector('#nf');
+      const purp = () => { f.purposeOther.hidden = f.purpose.value !== '__custom'; if (!f.purposeOther.hidden) f.purposeOther.focus(); f.purpose.options[0].textContent = `Auto (${purposeOf({ category: f.category.value })})`; };
+      f.purpose.onchange = purp; f.category.addEventListener('change', purp);
       const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; const bal = w.querySelector('.bal'); if (bal) bal.hidden = !li && f.tracksHoldings.checked; };
       f.tracksHoldings.onchange = sync;
-      f.kind.onchange = () => { f.category.innerHTML = String(html`${(f.kind.value === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}">${c.label}</option>`)}`); sync(); };
+      f.kind.onchange = () => { f.category.innerHTML = String(html`${(f.kind.value === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}">${c.label}</option>`)}`); sync(); purp(); };
       sync();
     },
-    actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => { const f = w.querySelector('#nf'); if (!f.name.value.trim()) { toast('Name is required', 'error'); return false; } return formData(f); } }],
+    actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => { const f = w.querySelector('#nf'); if (!f.name.value.trim()) { toast('Name is required', 'error'); return false; } if (f.purpose.value === '__custom' && !f.purposeOther.value.trim()) { toast('Type a name for the purpose, or pick one from the list', 'error'); return false; } return formData(f); } }],
   });
   if (!res || typeof res !== 'object') return null;
   const yn = v => (v === 'yes' ? true : v === 'no' ? false : null);
   const obj = { ...a, kind: res.kind, category: res.category, name: res.name.trim(), institution: res.institution, notes: res.notes,
     rate: toNum(res.rate), payment: toNum(res.payment), liquid: yn(res.liquid), investable: yn(res.investable), linkedTradingAccountId: res.kind === 'liability' ? '' : res.linkedTradingAccountId || '', currency: res.currency || displayCcy(),
     tracksHoldings: res.kind !== 'liability' && !!res.tracksHoldings, holdings: a.holdings || [],
-    custody: res.kind === 'liability' ? '' : res.custody, purpose: res.kind === 'liability' ? '' : (res.purpose || '').trim(), apy: res.kind === 'liability' ? null : toNum(res.apy) };
+    custody: res.kind === 'liability' ? '' : res.custody, purpose: res.kind === 'liability' ? '' : ((res.purpose === '__custom' ? res.purposeOther : res.purpose) || '').trim().slice(0, 40), apy: res.kind === 'liability' ? null : toNum(res.apy) };
   if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
   // a linked account is valued in its trading account's currency
   if (obj.linkedTradingAccountId) obj.currency = store.get('tAccounts', obj.linkedTradingAccountId)?.currency || obj.currency;
