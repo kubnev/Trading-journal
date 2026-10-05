@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.1';
 
 export const CHANGELOG = [
+  ['1.1.1', 'Sidebar: the input-mode note now reads “Input mode: Simple · change” instead of a bare “Simple input”.'],
   ['1.1.0', 'Subscriptions: add each one with the day it\'s charged and the account it comes from. Active subscriptions show on the Spending page (sorted by charge day, with monthly and yearly totals) and on their own tab; bills, income and paused items have tabs too, plus a “by account” breakdown. Charges are added automatically and carry the account.'],
   ['1.0.0', 'Ledgerline: a finance-only app — spending and net worth. New Spending section: quick add (button or N), month dashboard with pace, projection, safe-to-spend, categories vs average, income vs spending, needs/wants/saved (50/30/20), calendar, budgets, bills & subscriptions (auto-added, yearly cost), editable categories, bank CSV import/export. The trading journal and daily journal moved to the archive branch; linked trading accounts became normal accounts and old monthly cash-flow totals became transactions.'],
   ['0.7.1', 'Edit an account to change its balance: the form shows today\'s value and saving a new one records it for today, keeping earlier history.'],

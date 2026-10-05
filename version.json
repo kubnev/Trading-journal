@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "notes": "Subscriptions with charge day and account; active subscriptions on the Spending page.",
+  "version": "1.1.1",
+  "notes": "Clearer input-mode note in the sidebar.",
   "files": [
     "css/app.css",
     "js/backup.js",
