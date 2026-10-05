@@ -11,6 +11,7 @@ import * as J from './journal/views.js';
 import { openHelp, maybeStartTour } from './help.js';
 import { exportBackupFlow } from './backup.js';
 import { initTips } from './tips.js';
+import { modeChosen, chooserView } from './mode.js';
 import { migrateCurrencies, refreshRates, ensureRates, currenciesInUse, usingFallback } from './fx.js';
 
 // Grouped navigation. `pro: true` items only appear in Pro mode.
@@ -37,9 +38,9 @@ const NAV = [
     { path: '/networth', label: 'Net worth', icon: I.grid },
     { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
     { path: '/networth/update', label: 'Update balances', icon: I.refresh },
-    { path: '/networth/analytics', label: 'Analytics', icon: I.pie, pro: true },
-    { path: '/networth/cashflow', label: 'Cash flow', icon: I.flow, pro: true },
-    { path: '/networth/plan', label: 'FI planning', icon: I.star, pro: true },
+    { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
+    { path: '/networth/cashflow', label: 'Cash flow', icon: I.flow },
+    { path: '/networth/plan', label: 'FI planning', icon: I.star },
   ] },
   { group: 'Journal', items: [
     { path: '/journal', label: 'Today', icon: I.pen },
@@ -50,8 +51,8 @@ const NAV = [
     { path: '/trading/positions', label: 'Open positions', icon: I.target },
     { path: '/trading/trades', label: 'Trade log', icon: I.list },
     { path: '/trading', label: 'Performance', icon: I.chart },
-    { path: '/trading/reports', label: 'Reports', icon: I.chart, pro: true },
-    { path: '/trading/playbook', label: 'Playbook', icon: I.book, pro: true },
+    { path: '/trading/reports', label: 'Reports', icon: I.chart },
+    { path: '/trading/playbook', label: 'Playbook', icon: I.book },
     { path: '/trading/accounts', label: 'Trading accounts', icon: I.bank },
   ] },
 ];
@@ -109,21 +110,13 @@ function renderShell(path) {
   const match = ALL_ITEMS.filter(i => i.path === path || (i.path !== '/' && path.startsWith(i.path + '/')) || (i.path === '/trading/trades' && path.startsWith('/trading/trade'))).sort((a, b) => b.path.length - a.path.length)[0];
   $('#sidebar').innerHTML = String(html`
     <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Journal</span><span class="beta">beta</span></a>
-    <div class="mode-switch" role="radiogroup" aria-label="Detail level" data-tour="mode" title="Simple shows the essentials. Pro unlocks every field, report and chart — everywhere.">
-      <button role="radio" data-mode="simple" class="${mode !== 'pro' ? 'on' : ''}" aria-checked="${mode !== 'pro'}">Simple</button>
-      <button role="radio" data-mode="pro" class="${mode === 'pro' ? 'on' : ''}" aria-checked="${mode === 'pro'}">Pro</button>
-    </div>
-    <nav class="nav" data-tour="nav">${NAV.map(g => html`${g.group ? html`<div class="nav-group">${g.group}</div>` : ''}${g.items.filter(i => !i.pro || mode === 'pro').map(i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`)}`)}</nav>
+    <nav class="nav" data-tour="nav">${NAV.map(g => html`${g.group ? html`<div class="nav-group">${g.group}</div>` : ''}${g.items.map(i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`)}`)}</nav>
     <div class="sidebar-foot">
       <a href="#/settings" data-tour="settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
       <div class="theme-switch" role="radiogroup" aria-label="Theme">${['light', 'dark', 'auto'].map(t => html`<button role="radio" data-theme-set="${t}" aria-checked="${(s.theme || 'auto') === t}">${THEME_LABEL[t]}</button>`)}</div>
+      <a class="mode-badge" href="#/settings" data-tour="mode" title="How much detail you fill in — change it in Settings">${mode === 'pro' ? 'Pro' : 'Simple'} input</a>
       <div class="local-badge" title="All data is stored in this browser only (IndexedDB). Nothing is uploaded.">● Stored locally in this browser</div>
     </div>`);
-  $$('[data-mode]').forEach(b => b.onclick = async () => {
-    await store.saveSettings({ mode: b.dataset.mode });
-    // If a Pro-only page is open and we switch to Simple, go to the closest non-Pro page
-    if (match?.pro && b.dataset.mode === 'simple') go(match.path.startsWith('/trading') ? '/trading' : '/networth'); else route();
-  });
   $$('[data-theme-set]').forEach(b => b.onclick = async () => { await store.saveSettings({ theme: b.dataset.themeSet }); applyTheme(); route(); });
 }
 
@@ -149,8 +142,9 @@ export async function route() {
     const page = document.createElement('div');
     page.className = 'page';
     main.append(page);
+    // first launch: choose Simple or Pro input before anything else
+    if (!modeChosen()) { chooserView(page, () => { route(); maybeStartTour(); }); return; }
     cleanup = await view(page, params, { mode: store.getSettings().mode });
-    if (store.getSettings().mode !== 'pro' && ALL_ITEMS.find(i => i.path === path)?.pro) page.insertAdjacentHTML('afterbegin', '<div class="notice"><span>This is a Pro page — switch to <b>Pro</b> at the top of the sidebar to see it in the menu.</span></div>');
     notices(page);
     main.scrollTop = 0;
     window.scrollTo(0, 0);
@@ -179,6 +173,7 @@ function notices(page, only) {
   const stale = !s.lastBackupAt || Date.now() - new Date(s.lastBackupAt) > 7 * 864e5;
   const items = [];
   if (currenciesInUse().length && usingFallback() && !dismissed.has('fx')) items.push(['fx', 'Exchange rates haven\'t loaded yet — other currencies are converted with approximate rates.', 'Retry']);
+  if (s.reviewAccounts && s.mode === 'pro' && currentPath().startsWith('/networth')) items.push(['review', 'You switched to Pro input: check your accounts\' categories, custody, purpose and liquidity so analytics are accurate.', 'Review accounts']);
   if (updateInfo?.available && !dismissed.has('update')) items.push(['update', `Version ${updateInfo.latest} is available.`, 'Load it now']);
   if (hasData && stale && !dismissed.has('backup')) items.push(['backup', s.lastBackupAt ? `Last backup was ${Math.floor((Date.now() - new Date(s.lastBackupAt)) / 864e5)} days ago. Your data only lives in this browser.` : 'You haven\'t backed up yet. Your data only lives in this browser.', 'Back up now']);
   for (const [k, text, label] of items) {
@@ -188,10 +183,11 @@ function notices(page, only) {
     d.innerHTML = `<span>${text}</span><span class="spacer"></span><button class="btn sm primary" data-n="${k}">${label}</button><button class="btn sm ghost" data-x="${k}">Later</button>`;
     d.querySelector('[data-n]').onclick = async () => {
       if (k === 'update') return applyUpdate(updateInfo.files);
+      if (k === 'review') { await store.saveSettings({ reviewAccounts: false }); return currentPath() === '/networth/accounts' ? route() : go('/networth/accounts'); }
       if (k === 'fx') { const r = await refreshRates({ force: true }); toast(r.ok ? 'Exchange rates loaded' : 'Still offline: ' + (r.errors || []).join(' '), r.ok ? 'info' : 'error'); return route(); }
       if (await exportBackupFlow()) d.remove();
     };
-    d.querySelector('[data-x]').onclick = () => { dismissed.add(k); d.remove(); };
+    d.querySelector('[data-x]').onclick = () => { dismissed.add(k); d.remove(); if (k === 'review') store.saveSettings({ reviewAccounts: false }); };
     page.prepend(d);
   }
 }
@@ -217,7 +213,7 @@ async function boot() {
   document.addEventListener('keydown', e => { if (e.key === '?' && !e.target.closest('input,textarea,select')) openHelp(currentPath()); });
   $('#sidebar').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   route();
-  maybeStartTour();
+  if (modeChosen()) maybeStartTour();
   // exchange rates for multi-currency data (cached; refreshed at most twice a day)
   $('#main').addEventListener('input', () => { dirty = true; });
   // Surface unexpected errors instead of failing silently (beta). Benign browser noise is ignored.

@@ -152,7 +152,7 @@ async function todayView(el, mode) {
 // ================= history =================
 let cursor = null;
 export async function history(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   if (!cursor) cursor = today().slice(0, 7);
   el.innerHTML = String(html`
     <div class="page-head"><div><h1>Journal history</h1><div class="sub">Mood, entries and closed trades by day. Click a day to read or edit it.</div></div>
@@ -210,7 +210,7 @@ export async function history(el, _p, { mode }) {
 
 // ================= insights =================
 export async function insights(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   const all = entries();
   el.innerHTML = String(html`<div class="page-head"><div><h1>Journal insights</h1><div class="sub">Patterns in how you feel, sleep and perform — and how that lines up with your trading.</div></div></div><div id="body"></div>`);
   const body = el.querySelector('#body');

@@ -195,6 +195,7 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus, .btn:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 textarea { resize: vertical; min-height: 70px; width: 100%; line-height: 1.5; }
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+[hidden] { display: none !important; }   /* components set display:flex/grid — hidden must always win */
 label.field { display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; font-size: 12px; color: var(--text-2); font-weight: 550; min-width: 0; }
 label.field input, label.field select, label.field textarea { width: 100%; font-weight: 400; }
 label.field .hint { margin-top: -3px; }
@@ -419,3 +420,25 @@ details.fold > summary { cursor: pointer; font-family: var(--font-serif); font-w
 .tour-card p { font-size: 13.5px; color: var(--text-2); }
 .btn.wrap { white-space: normal; text-align: left; max-width: 100%; height: auto; }
 .field-label { display: inline; }
+/* Simple account type picker */
+.type-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-top: 6px; }
+.type-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; font-weight: 400; }
+.type-opt:hover { border-color: var(--border-strong); }
+.type-opt:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--surface-2); }
+.type-opt input { margin-top: 3px; accent-color: var(--accent); }
+.type-opt b { display: block; font-size: 14px; color: var(--text-1); }
+.type-opt small { display: block; font-size: 12px; line-height: 1.4; color: var(--text-3); margin-top: 2px; }
+/* Input mode chooser */
+.mode-choose { max-width: 820px; margin: 6vh auto 0; text-align: center; }
+.mode-choose > p { max-width: 620px; margin-left: auto; margin-right: auto; }
+.mode-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 22px 0 14px; text-align: left; }
+.mode-cards.compact { margin: 10px 0 0; gap: 10px; }
+.mode-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 18px 14px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); color: var(--text-1); font: inherit; text-align: left; cursor: pointer; }
+.mode-card:hover { border-color: var(--accent); }
+.mode-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; cursor: default; }
+.mode-title { font-family: var(--font-serif); font-size: 22px; font-weight: 600; }
+.mode-cards.compact .mode-title { font-size: 17px; }
+.mode-lead { color: var(--text-2); font-size: 14px; }
+.mode-card ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-3); font-size: 13px; line-height: 1.5; }
+.mode-cards.compact .mode-card ul { font-size: 12.5px; }
+.mode-badge { display: block; font-size: 12px; color: var(--text-3); padding: 4px 10px; }

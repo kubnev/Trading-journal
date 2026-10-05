@@ -123,7 +123,7 @@ export async function refreshMarks() {
 
 // ---------- page ----------
 export async function positions(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   const trades = computedTrades();
   const capital = startingCapital(null) + trades.filter(t => t.closed).reduce((s, t) => s + t.net, 0);
   const book = openBook(trades, capital);

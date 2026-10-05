@@ -17,7 +17,7 @@ let sort = { key: 'date', dir: -1 };
 const PAGE = 50;
 
 export async function tradeList(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   let page = 0;
   el.innerHTML = String(html`
     <div class="page-head"><div><h1>Trade log</h1><div class="sub">Every trade, open and closed. Click a row for the full story.</div></div>

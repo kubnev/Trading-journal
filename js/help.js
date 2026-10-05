@@ -53,7 +53,7 @@ const GUIDE = [
   { id: 'playbook', title: 'Playbook', match: p => p === '/trading/playbook', body: `<p>Define each setup with a thesis, entry trigger, stop and exit rules, plus a checklist you tick on every trade. Stats per setup show which ones deserve more size.</p>` },
   { id: 'taccounts', title: 'Trading accounts', match: p => p === '/trading/accounts', body: `<p>Starting balance plus deposits/withdrawals gives trading capital, which is used for risk %, heat and drawdown %. A net-worth account can optionally be linked to a trading account so its balance follows the journal.</p>` },
   { id: 'settings', title: 'Settings & data', match: p => p === '/settings', body: `<ul><li><b>Backups</b> — your data lives only in this browser. Export a backup regularly (you'll be reminded weekly). Backups are encrypted with a password you choose — keep it somewhere safe, a lost password can't be recovered.</li><li><b>Delete all data</b> — the Danger zone wipes everything this app stored in this browser.</li><li><b>Price data</b> — optional Finnhub key for stock prices.</li><li><b>Lists</b> — your mistakes, emotions, tags, habits and journal tags.</li><li><b>Check for app update</b> — load the newest version.</li></ul>` },
-  { id: 'general', title: 'Simple / Pro, themes & shortcuts', match: () => false, body: `<ul><li><b>Simple / Pro</b> (top of the sidebar) switches the detail level everywhere. Your data is the same in both.</li><li><b>Theme</b> — Light, Dark or Auto (follows your device).</li><li>Press <kbd>?</kbd> anywhere to open this help.</li><li>Everything is stored in this browser (IndexedDB). Nothing is uploaded.</li></ul>` },
+  { id: 'general', title: 'Simple / Pro, themes & shortcuts', match: () => false, body: `<ul><li><b>Simple / Pro input</b> (Settings → Input mode) decides how much you fill in when adding accounts, trades and journal entries. Every page and chart is the same in both, and switching never deletes anything.</li><li><b>Theme</b> — Light, Dark or Auto (follows your device).</li><li>Press <kbd>?</kbd> anywhere to open this help.</li><li>Everything is stored in this browser (IndexedDB). Nothing is uploaded.</li></ul>` },
 ];
 
 let drawer = null;
@@ -83,7 +83,7 @@ export function closeHelp() { drawer?.remove(); drawer = null; document.removeEv
 // ---------- tour ----------
 const STEPS = [
   { title: 'Welcome', text: 'This app combines three things: your <b>net worth</b>, a <b>daily journal</b>, and a <b>swing-trading</b> log. Here is where everything lives.' },
-  { sel: '[data-tour=mode]', title: 'Simple or Pro', text: 'One switch for the whole app. Simple shows the essentials; Pro adds analytics, reports and extra fields. Your data is the same either way.' },
+  { sel: '[data-tour=mode]', title: 'Simple or Pro input', text: 'Shows which input mode you chose. Simple = fewer, plain-language fields; Pro = detailed categories and fields. Every chart and report is available in both — change it in Settings.' },
   { sel: '.nav a[href="#/"]', title: 'Overview', text: 'Your daily home: net worth, open positions, today\'s journal, and a short to-do list.' },
   { sel: '.nav a[href="#/networth/accounts"]', title: 'Accounts & holdings', text: 'Add everything you own and owe. Set where it\'s held (bank, CEX, DeFi, wallet…), its purpose, a fixed yield that grows daily, or individual coins/stocks with live prices.' },
   { sel: '.nav a[href="#/networth/update"]', title: 'Update balances', text: 'Once a month (or whenever), record balances. Each update becomes a point on your net-worth history.' },

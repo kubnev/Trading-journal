@@ -5,6 +5,7 @@
 
 const F = {
   // ---------- net-worth account ----------
+  group: 'Pick the closest fit. Cash = spending money; Savings = money put aside; Trading capital = money in your trading accounts; Investments = long-term holdings; Assets = things you own; Debt = what you owe.',
   kind: 'Asset = something you own (cash, investments, a home). Liability = something you owe (loan, card balance). Liabilities are subtracted from net worth.',
   category: 'Groups the account in charts and decides the defaults for “Liquid?” and “Counts toward financial independence?”.',
   'nf:name': 'Any name you’ll recognise, e.g. “Revolut EUR” or “Vanguard ISA”.',

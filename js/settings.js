@@ -2,9 +2,10 @@ import * as store from './store.js';
 import { html, raw, esc, toast, download, readFileText, confirmDlg, modal, formData, today } from './ui.js';
 import { loadDemo, removeDemo, hasDemo } from './demo.js';
 import { exportTradesCSV, importTradesCSVDialog } from './trading/csv.js';
-import { refresh } from './main.js';
+import { refresh, go } from './main.js';
 import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
 import { exportBackupFlow, importBackupFlow } from './backup.js';
+import { modeCard, switchMode } from './mode.js';
 
 import { CURRENCIES, refreshRates, currenciesInUse, otherCurrencies, ratesAt, rate, usingFallback, migrateCurrencies } from './fx.js';
 
@@ -18,6 +19,7 @@ export default async function settingsView(el) {
     <div class="page-head"><div><h1>Settings & data</h1><div class="sub">Preferences, backups, import/export.</div></div></div>
     <div class="grid g2">
       <div class="stack">
+        ${modeCard()}
         <form class="card" id="prefs">
           <div class="card-head"><h2>Preferences</h2></div>
           <div class="form-grid">
@@ -137,6 +139,8 @@ export default async function settingsView(el) {
   };
 
   el.addEventListener('click', async e => {
+    const pick = e.target.closest('[data-pick]')?.dataset.pick;
+    if (pick) { if (await switchMode(pick)) { if (pick === 'pro' && store.all('nwAccounts').length) go('/networth/accounts'); else refresh(); } return; }
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (!a) return;
     if (a === 'fx') {

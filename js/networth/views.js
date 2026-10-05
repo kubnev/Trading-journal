@@ -1,7 +1,7 @@
 import * as store from '../store.js';
 import { html, raw, money, pct, num, pnlClass, stat, fmtDate, fmtMonth, today, modal, toast, confirmDlg, formData, toNum, monthKey, parseDay, dayKey } from '../ui.js';
 import * as C from '../charts.js';
-import { ASSET_CATS, LIAB_CATS, catLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, fiMetrics, projection, changeDecomposition, debtMetrics, CUSTODY, custodyOf, custodyLabel, PURPOSES, purposeOf, TIERS, yieldSummary, liveValue, positions, concentration } from './calc.js';
+import { ASSET_CATS, LIAB_CATS, catLabel, assetCats, liabCats, GROUPS, DEBT, groupOf, groupInfo, simpleMode, typeLabel, isLiquid, isInvestable, nwSeries, pointAt, cashflowMonths, trailing, fiMetrics, projection, changeDecomposition, debtMetrics, CUSTODY, custodyOf, custodyLabel, PURPOSES, purposeOf, TIERS, yieldSummary, liveValue, positions, concentration } from './calc.js';
 import { loadDemo } from '../demo.js';
 import { toDisplay, ccyOf, moneyIn, ccySelect, displayCcy, sameMoney } from '../fx.js';
 import { updateAllPrices, summaryText, holdingsTotal, holdingValue, syncHoldingsSnapshot, normSymbol } from './prices.js';
@@ -9,7 +9,7 @@ import { go, refresh, query } from '../main.js';
 
 const RANGES = [['all', 'All'], ['1y', '1Y'], ['3y', '3Y'], ['5y', '5Y']];
 let range = 'all';
-const catColor = (id, p) => { const i = ASSET_CATS.findIndex(c => c.id === id); return i >= 0 ? p.series[i % 8] : p.series[(LIAB_CATS.findIndex(c => c.id === id) + 2) % 8]; };
+const catColor = (id, p) => { const i = assetCats().findIndex(c => c.id === id); return i >= 0 ? p.series[i % 8] : p.series[(liabCats().findIndex(c => c.id === id) + 2) % 8]; };
 // Categories beyond 8 share hues, so allocation charts fold small ones into "Other" (max 7 slices)
 function emptyNW() {
   return html`<div class="empty"><div class="empty-title">Start tracking your net worth</div><p>Add what you own (cash, investments, property) and what you owe (mortgage, loans, cards). Then update balances once a month — that's all it takes to build a history.</p>
@@ -66,7 +66,7 @@ export function startTicker(root) {
 
 // ================= overview =================
 export async function overview(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   const accts = store.all('nwAccounts');
   const allSeries = nwSeries();
   el.innerHTML = String(html`<div class="page-head"><div><h1>Net worth</h1><div class="sub">${allSeries.length ? `Last updated ${fmtDate(allSeries.at(-1).date)}` : 'Everything you own minus everything you owe.'}</div></div>
@@ -88,8 +88,8 @@ export async function overview(el, _p, { mode }) {
     const debt = debtMetrics(cur);
     const efMonths = t12.avgExpenses ? ((cur.byCat.cash || 0) + (cur.byCat.savings || 0)) / t12.avgExpenses : null;
     const p = C.palette();
-    const assetCats = ASSET_CATS.filter(c => (cur.byCat[c.id] || 0) > 0);
-    const liabCats = LIAB_CATS.filter(c => (cur.byCat[c.id] || 0) > 0);
+    const aCats = assetCats().filter(c => (cur.byCat[c.id] || 0) > 0);
+    const lCats = liabCats().filter(c => (cur.byCat[c.id] || 0) > 0);
     const liquidShare = cur.assets ? cur.liquid / cur.assets : null;
     const decomp = changeDecomposition(series);
     const hasDecomp = decomp.some(d => d.savings != null);
@@ -128,7 +128,7 @@ export async function overview(el, _p, { mode }) {
       </div>
       <div class="grid g2 mt">
         <div class="card"><div class="card-head"><h2>Change per period</h2><span class="hint">${hasDecomp ? 'savings vs. market & other' : 'log Cash flow to split savings from market moves'}</span></div><div class="chart"><canvas id="n-chg"></canvas></div></div>
-        ${liabCats.length ? html`<div class="card"><div class="card-head"><h2>Debt breakdown</h2><span class="hint">${debt.wRate != null ? `weighted APR ${num(debt.wRate, 2)}%` : ''}</span></div><div class="chart"><canvas id="n-debt"></canvas></div></div>`
+        ${lCats.length ? html`<div class="card"><div class="card-head"><h2>Debt breakdown</h2><span class="hint">${debt.wRate != null ? `weighted APR ${num(debt.wRate, 2)}%` : ''}</span></div><div class="chart"><canvas id="n-debt"></canvas></div></div>`
                           : html`<div class="card"><div class="card-head"><h2>Debt</h2></div><p class="muted">No liabilities recorded. 🎉</p></div>`}
       </div>` : ''}
       <div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Accounts</h2><a class="hint" href="#/networth/accounts">Manage →</a></div>
@@ -136,7 +136,7 @@ export async function overview(el, _p, { mode }) {
         <tbody>${accts.filter(a => !a.archivedAt).sort((a, b) => (a.kind === 'liability') - (b.kind === 'liability') || (cur.byAcct[b.id] || 0) - (cur.byAcct[a.id] || 0)).map(a => {
           const v = cur.byAcct[a.id] || 0, pv = prev ? prev.byAcct[a.id] || 0 : null;
           const d = pv == null ? null : (a.kind === 'liability' ? -(v - pv) : v - pv);
-          return html`<tr><td><b>${a.name}</b>${a.institution ? html` <span class="muted small">${a.institution}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked</span>` : ''}</td><td>${catLabel(a.category)}</td>${pro ? html`<td>${a.kind === 'liability' ? '' : isLiquid(a) ? 'Yes' : 'No'}</td>` : ''}
+          return html`<tr><td><b>${a.name}</b>${a.institution ? html` <span class="muted small">${a.institution}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked</span>` : ''}</td><td>${typeLabel(a)}</td>${pro ? html`<td>${a.kind === 'liability' ? '' : isLiquid(a) ? 'Yes' : 'No'}</td>` : ''}
             <td class="num ${a.kind === 'liability' ? 'neg' : ''}">${money(a.kind === 'liability' ? -v : v)}</td><td class="num ${pnlClass(d)}">${d ? money(d, { sign: true }) : '—'}</td><td class="num">${a.kind === 'liability' ? '' : pct(cur.assets ? v / cur.assets : null, 1)}</td>${pro ? html`<td><div style="height:28px;width:110px"><canvas data-spark="${a.id}"></canvas></div></td>` : ''}</tr>`;
         })}</tbody>
         <tfoot><tr><td colspan="${pro ? 3 : 2}">Net worth</td><td class="num">${money(cur.net)}</td><td class="num ${pnlClass(ch)}">${ch != null ? money(ch, { sign: true }) : ''}</td><td colspan="${pro ? 2 : 1}"></td></tr></tfoot></table></div></div>`);
@@ -147,9 +147,9 @@ export async function overview(el, _p, { mode }) {
       series: pro ? [{ label: 'Net worth', data: series.map(s => s.net), color: p.series[0], fill: true }, { label: 'Assets', data: series.map(s => s.assets), color: p.series[2] }, { label: 'Liabilities', data: series.map(s => s.liabilities), color: p.series[1] }]
                   : [{ label: 'Net worth', data: series.map(s => s.net), color: p.series[0], fill: true }],
     });
-    C.doughnut(body.querySelector('#n-alloc'), { labels: assetCats.map(c => c.label), values: assetCats.map(c => cur.byCat[c.id]), colors: assetCats.map(c => catColor(c.id, p)), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
+    C.doughnut(body.querySelector('#n-alloc'), { labels: aCats.map(c => c.label), values: aCats.map(c => cur.byCat[c.id]), colors: aCats.map(c => catColor(c.id, p)), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
     if (pro) {
-      const cats = ASSET_CATS.filter(c => series.some(s => (s.byCat[c.id] || 0) > 0));
+      const cats = assetCats().filter(c => series.some(s => (s.byCat[c.id] || 0) > 0));
       C.make(body.querySelector('#n-stack'), {
         type: 'line',
         data: { labels, datasets: cats.map(c => ({ label: c.label, data: series.map(s => s.byCat[c.id] || 0), borderColor: catColor(c.id, p), backgroundColor: C.alpha(catColor(c.id, p), 0.55), fill: true, borderWidth: 1, tension: 0.15, pointRadius: 0 })) },
@@ -163,7 +163,7 @@ export async function overview(el, _p, { mode }) {
           options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y, { sign: true })}`, footer: items => `Total: ${money(decomp[items[0].dataIndex].change, { sign: true })}` } } }, scales: { x: { stacked: true, ...C.plainAxis({ ticks: { maxRotation: 0 } }) }, y: { stacked: true, ...C.moneyAxis() } } },
         });
       } else C.signBars(body.querySelector('#n-chg'), { labels: dl, values: decomp.map(d => d.change) });
-      if (liabCats.length) C.doughnut(body.querySelector('#n-debt'), { labels: liabCats.map(c => c.label), values: liabCats.map(c => cur.byCat[c.id]), colors: liabCats.map(c => catColor(c.id, p)), center: { value: money(cur.liabilities, { compact: true }), label: 'owed' } });
+      if (lCats.length) C.doughnut(body.querySelector('#n-debt'), { labels: lCats.map(c => c.label), values: lCats.map(c => cur.byCat[c.id]), colors: lCats.map(c => catColor(c.id, p)), center: { value: money(cur.liabilities, { compact: true }), label: 'owed' } });
       body.querySelectorAll('[data-spark]').forEach(cv => { const id = cv.dataset.spark; const a = store.get('nwAccounts', id); C.sparkline(cv, series.map(s => s.byAcct[id] || 0), a.kind === 'liability' ? p.series[1] : p.series[0]); });
     }
   };
@@ -189,7 +189,7 @@ export async function update(el) {
         if (!list.length) return '';
         return html`<fieldset><legend>${l}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
           const v = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcctNative[a.id] || '';
-          return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)} · ${catLabel(a.category)}${a.linkedTradingAccountId ? ' · auto from trading journal' : a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
+          return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)} · ${typeLabel(a)}${a.linkedTradingAccountId ? ' · auto from trading journal' : a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
             <input type="number" step="any" name="${a.id}" value="${a.linkedTradingAccountId ? Math.round(prior.byAcctNative[a.id] * 100) / 100 : a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.linkedTradingAccountId || a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
         })}</div></fieldset>`;
       })}
@@ -225,7 +225,56 @@ export async function update(el) {
 // ================= accounts =================
 // the standard buckets plus any custom ones already used on other accounts
 const purposeChoices = a => [...new Set([...PURPOSES, ...store.all('nwAccounts').map(x => (x.purpose || '').trim()).filter(Boolean), ...(a.purpose ? [a.purpose] : [])])];
+// Simple input: pick one of six types; everything else (custody, purpose, liquidity…) is automatic.
+async function editAccountSimple(a) {
+  const tAccts = store.all('tAccounts');
+  const g0 = a.id ? groupOf(a) : a.kind === 'liability' ? 'debt' : 'cash';
+  const types = [...GROUPS, DEBT];
+  const res = await modal({
+    title: a.id ? `Edit ${a.name}` : 'Add account',
+    body: String(html`<form id="nf" class="form-grid">
+      <div class="field full">What is it?
+        <div class="type-pick" role="radiogroup">${types.map(t => html`<label class="type-opt"><input type="radio" name="group" value="${t.id}" ${t.id === g0 ? raw('checked') : ''}><span><b>${t.label}</b><small>${t.hint}</small></span></label>`)}</div></div>
+      <label class="field span2">Name<input name="name" required value="${a.name || ''}" placeholder="e.g. Revolut, Savings account, Binance, Car"></label>
+      <label class="field">Currency${raw(ccySelect('currency', a.currency || displayCcy()))}</label>
+      ${!a.id ? html`<label class="field bal">Current balance<input name="balance" type="number" step="any"></label>` : ''}
+      <label class="field yld">Interest / yield (APY %) <span class="hint">optional</span><input name="apy" type="number" step="any" min="0" max="100" value="${a.apy ?? ''}" placeholder="e.g. 3.5"></label>
+      <label class="field lia">Interest rate (APR %) <span class="hint">optional</span><input name="rate" type="number" step="any" min="0" value="${a.rate ?? ''}"></label>
+      ${tAccts.length ? html`<label class="field span2 lnk">Link to trading account <span class="hint">balance follows the journal</span><select name="linkedTradingAccountId"><option value="">— not linked —</option>${tAccts.map(t => html`<option value="${t.id}" ${a.linkedTradingAccountId === t.id ? raw('selected') : ''}>${t.name}</option>`)}</select></label>` : ''}
+      <label class="check full hld"><input type="checkbox" name="tracksHoldings" ${a.tracksHoldings ? raw('checked') : ''}> List what I hold (e.g. 0.5 BTC, 10 AAPL) and update prices automatically</label>
+    </form>`),
+    onMount: w => {
+      const f = w.querySelector('#nf');
+      const sync = () => {
+        const g = f.group.value, show = (sel, on) => { const e = w.querySelector(sel); if (e) e.hidden = !on; };
+        show('.yld', g === 'cash' || g === 'savings' || g === 'investments');
+        show('.lia', g === 'debt');
+        show('.lnk', g === 'trading');
+        show('.hld', g === 'trading' || g === 'investments');
+        const hl = f.tracksHoldings; if (w.querySelector('.hld').hidden) hl.checked = false;
+        show('.bal', !hl.checked && !(g === 'trading' && f.linkedTradingAccountId?.value));
+      };
+      f.addEventListener('change', sync); sync();
+    },
+    actions: [{ label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => { const f = w.querySelector('#nf'); if (!f.name.value.trim()) { toast('Name is required', 'error'); return false; } return formData(f); } }],
+  });
+  if (!res || typeof res !== 'object') return null;
+  const g = res.group, isDebt = g === 'debt';
+  // keep the detailed (Pro) category and settings if the type didn't change — switching to Pro later restores them
+  const same = a.id && groupOf(a) === g;
+  const obj = { ...a, name: res.name.trim(), currency: res.currency || displayCcy(),
+    kind: isDebt ? 'liability' : 'asset', category: same ? a.category : groupInfo(g).cat,
+    apy: isDebt ? null : toNum(res.apy), rate: isDebt ? toNum(res.rate) : null,
+    linkedTradingAccountId: g === 'trading' ? res.linkedTradingAccountId || '' : '',
+    tracksHoldings: (g === 'trading' || g === 'investments') && !!res.tracksHoldings, holdings: a.holdings || [] };
+  if (!same) Object.assign(obj, { custody: '', purpose: '', liquid: null, investable: null, payment: isDebt ? a.payment : null });
+  if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
+  if (obj.linkedTradingAccountId) obj.currency = store.get('tAccounts', obj.linkedTradingAccountId)?.currency || obj.currency;
+  return finishAccountSave(a, obj, res);
+}
+
 async function editAccount(a = { kind: 'asset', category: 'cash' }) {
+  if (simpleMode()) return editAccountSimple(a);
   const tAccts = store.all('tAccounts');
   const catOpts = kind => (kind === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}" ${a.category === c.id ? raw('selected') : ''}>${c.label}</option>`);
   const res = await modal({
@@ -272,9 +321,13 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
   if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
   // a linked account is valued in its trading account's currency
   if (obj.linkedTradingAccountId) obj.currency = store.get('tAccounts', obj.linkedTradingAccountId)?.currency || obj.currency;
+  return finishAccountSave(a, obj, res);
+}
+
+async function finishAccountSave(a, obj, res) {
   const saved = await store.put('nwAccounts', obj);
   if (saved.tracksHoldings && !a.tracksHoldings) { await editHoldings(saved); return saved; }
-  if (!a.id && !saved.tracksHoldings && res.balance !== '' && res.balance != null) {
+  if (!a.id && !saved.tracksHoldings && !saved.linkedTradingAccountId && res.balance !== '' && res.balance != null) {
     const d = today();
     const snap = store.all('nwSnapshots').find(s => s.date === d);
     await store.put('nwSnapshots', { ...(snap || { date: d }), balances: { ...(snap?.balances || {}), [saved.id]: Math.abs(+res.balance) } });
@@ -333,12 +386,12 @@ function holdingsCard(a, pro) {
 }
 
 export async function accounts(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   const accts = store.all('nwAccounts');
   const cur = pointAt(today());
   const sec = (title, list) => html`<div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>${title}</h2><span class="hint">${money(list.filter(a => !a.archivedAt).reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0))}</span></div>
     <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Category</th><th>Institution</th>${pro ? raw('<th>Details</th>') : ''}<th class="num">Latest balance</th><th></th></tr></thead><tbody>
-    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}</td><td>${catLabel(a.category)}</td><td>${a.institution || ''}</td>
+    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}</td><td>${typeLabel(a)}</td><td>${a.institution || ''}</td>
       ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${moneyIn(+a.payment, ccyOf(a))}/mo` : ''].filter(Boolean).join(' · ') : [custodyLabel(custodyOf(a)), purposeOf(a), +a.apy ? `${a.apy}% APY` : '', isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>` : ''}
       <td class="num">${moneyIn(cur.byAcctNative[a.id] || 0, ccyOf(a))}${!sameMoney(ccyOf(a), displayCcy()) ? html`<div class="dist">≈ ${money(cur.byAcct[a.id] || 0)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
@@ -346,8 +399,8 @@ export async function accounts(el, _p, { mode }) {
   const assets = accts.filter(a => a.kind !== 'liability').sort((a, b) => !!a.archivedAt - !!b.archivedAt || a.name.localeCompare(b.name));
   const liabs = accts.filter(a => a.kind === 'liability').sort((a, b) => !!a.archivedAt - !!b.archivedAt || a.name.localeCompare(b.name));
   el.innerHTML = String(html`<div class="page-head"><div><h1>Accounts & holdings</h1><div class="sub">Everything you own and owe. Closing an account (sold, paid off) keeps its history.</div></div>
-    <div class="actions">${priceBtn()}<button class="btn" data-new-l>+ Add debt</button><button class="btn primary" data-new>+ Add asset</button></div></div>
-    ${!accts.length ? html`<div class="empty"><div class="empty-title">No accounts yet</div><p>Typical list: checking, savings, brokerage, retirement, crypto, home, car — and mortgage, car loan, credit cards.</p><button class="btn primary" data-new>+ Add asset</button><button class="btn" data-new-l>+ Add debt</button><button class="btn" data-demo>Load demo data</button></div>` : ''}
+    <div class="actions">${priceBtn()}${simpleMode() ? html`<button class="btn primary" data-new>+ Add account</button>` : html`<button class="btn" data-new-l>+ Add debt</button><button class="btn primary" data-new>+ Add asset</button>`}</div></div>
+    ${!accts.length ? html`<div class="empty"><div class="empty-title">No accounts yet</div><p>${simpleMode() ? 'Add your cash, savings, trading capital, investments and the things you own — and any debts.' : 'Typical list: checking, savings, brokerage, retirement, crypto, home, car — and mortgage, car loan, credit cards.'}</p><button class="btn primary" data-new>+ Add asset</button><button class="btn" data-new-l>+ Add debt</button><button class="btn" data-demo>Load demo data</button></div>` : ''}
     ${assets.length ? sec('Assets', assets) : ''}
     ${assets.filter(a => a.tracksHoldings && !a.archivedAt).map(a => holdingsCard(a, pro))}
     ${liabs.length ? sec('Liabilities', liabs) : ''}`);
@@ -433,8 +486,8 @@ export async function plan(el) {
   const cur = series.at(-1) || pointAt(today());
   const fi = fiMetrics(cur.investable);
   const pl = s.plan;
-  const assetCats = ASSET_CATS.filter(c => (cur.byCat[c.id] || 0) > 0 || +pl.targetAllocation?.[c.id]);
-  const targetSum = assetCats.reduce((a, c) => a + (+pl.targetAllocation?.[c.id] || 0), 0);
+  const aCats = assetCats().filter(c => (cur.byCat[c.id] || 0) > 0 || +pl.targetAllocation?.[c.id]);
+  const targetSum = aCats.reduce((a, c) => a + (+pl.targetAllocation?.[c.id] || 0), 0);
 
   el.innerHTML = String(html`<div class="page-head"><div><h1>Financial independence</h1><div class="sub">How far your investable assets are from covering your spending forever — in today's money.</div></div></div>
     <div class="stats big">
@@ -460,8 +513,8 @@ export async function plan(el) {
     </div>
     <div class="grid g2 mt">
       <form class="card" id="tf"><div class="card-head"><h2>Target allocation</h2><span class="hint ${Math.abs(targetSum - 100) > 0.01 && targetSum ? 'neg' : ''}">total ${num(targetSum, 0)}%</span></div>
-        ${assetCats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Category</th><th class="num">Current</th><th class="num">Target %</th><th class="num">Drift</th><th class="num">To rebalance</th></tr></thead><tbody>
-        ${assetCats.map(c => { const curPct = cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0; const tg = +pl.targetAllocation?.[c.id] || 0; const drift = tg ? curPct - tg / 100 : null; const reb = tg ? (tg / 100) * cur.assets - (cur.byCat[c.id] || 0) : null;
+        ${aCats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Category</th><th class="num">Current</th><th class="num">Target %</th><th class="num">Drift</th><th class="num">To rebalance</th></tr></thead><tbody>
+        ${aCats.map(c => { const curPct = cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0; const tg = +pl.targetAllocation?.[c.id] || 0; const drift = tg ? curPct - tg / 100 : null; const reb = tg ? (tg / 100) * cur.assets - (cur.byCat[c.id] || 0) : null;
           return html`<tr><td><span class="dot" style="background:${catColor(c.id, C.palette())}"></span>${c.label}</td><td class="num">${pct(curPct, 1)}</td><td class="num"><input name="${c.id}" type="number" min="0" max="100" step="1" value="${tg || ''}" style="width:70px;text-align:right"></td><td class="num ${drift != null && Math.abs(drift) > 0.05 ? 'neg' : ''}">${drift == null ? '—' : pct(drift, 1, { sign: true })}</td><td class="num">${reb == null ? '—' : money(reb, { sign: true })}</td></tr>`; })}
         </tbody></table></div><div class="row mt"><span class="small muted">Drift beyond ±5 points is highlighted.</span><span class="spacer"></span><button class="btn primary">Save targets</button></div>` : html`<p class="muted">Add assets first.</p>`}
       </form>
@@ -494,9 +547,9 @@ export async function plan(el) {
     labels: pr.map(x => `Age ${num(x.age, 0)}`),
     series: [{ label: 'Projected investable assets', data: pr.map(x => x.value), color: p.series[0], fill: true }, ...(fi.fiNumber ? [{ label: 'FI number', data: pr.map(() => fi.fiNumber), color: p.series[2], dash: [] }] : [])],
   });
-  if (assetCats.length) C.make(el.querySelector('#p-alloc'), {
+  if (aCats.length) C.make(el.querySelector('#p-alloc'), {
     type: 'bar',
-    data: { labels: assetCats.map(c => c.label), datasets: [{ label: 'Current', data: assetCats.map(c => (cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0) * 100), backgroundColor: p.series[0], maxBarThickness: 14 }, { label: 'Target', data: assetCats.map(c => +pl.targetAllocation?.[c.id] || 0), backgroundColor: p.neutral, maxBarThickness: 14 }] },
+    data: { labels: aCats.map(c => c.label), datasets: [{ label: 'Current', data: aCats.map(c => (cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0) * 100), backgroundColor: p.series[0], maxBarThickness: 14 }, { label: 'Target', data: aCats.map(c => +pl.targetAllocation?.[c.id] || 0), backgroundColor: p.neutral, maxBarThickness: 14 }] },
     options: { indexAxis: 'y', plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${num(c.parsed.x, 1)}%` } } }, scales: { x: { grid: { color: p.grid }, border: { display: false }, ticks: { callback: v => v + '%' } }, y: C.plainAxis({ ticks: { autoSkip: false } }) } },
   });
 }

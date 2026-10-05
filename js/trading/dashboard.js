@@ -35,7 +35,7 @@ export function insights(trades, s) {
 }
 
 export async function dashboard(el, _p, { mode }) {
-  const pro = mode === 'pro';
+  const pro = true;   // every view shows everything; Simple/Pro only changes what you fill in
   el.innerHTML = String(html`
     <div class="page-head"><div><h1>Performance</h1><div class="sub">How your swing trading is doing — edge, risk and consistency.</div></div>
       <div class="actions"><a class="btn" href="#/trading/positions">Open positions</a><a class="btn primary" href="#/trading/new">+ New trade</a></div></div>

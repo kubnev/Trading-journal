@@ -29,6 +29,26 @@ export const LIAB_CATS = [
   { id: 'tax', label: 'Taxes owed', shortTerm: true },
   { id: 'otherdebt', label: 'Other debt', shortTerm: false },
 ];
+// Simple input mode: five kinds of asset + debt. Every detailed category belongs to exactly one,
+// so switching modes never loses information (the detailed category is kept underneath).
+export const GROUPS = [
+  { id: 'cash', label: 'Cash', hint: 'Money you spend day to day — current account, card balance, wallet. Food, rent, going out.', cat: 'cash' },
+  { id: 'savings', label: 'Savings', hint: 'Money you put aside — savings accounts, deposits, money-market funds.', cat: 'savings' },
+  { id: 'trading', label: 'Trading capital', hint: 'Working capital in your trading accounts (broker, exchange).', cat: 'trading' },
+  { id: 'investments', label: 'Investments', hint: 'Long-term holdings you don’t actively trade — ETFs, stocks, crypto you hold, pension.', cat: 'brokerage' },
+  { id: 'assets', label: 'Assets', hint: 'Things you own outright — home, car, watches, collectibles, trading cards.', cat: 'otherasset' },
+];
+export const DEBT = { id: 'debt', label: 'Debt', hint: 'Anything you owe — loans, credit card balance, money borrowed from someone.', cat: 'otherdebt' };
+const CAT_GROUP = { cash: 'cash', savings: 'savings', trading: 'trading', brokerage: 'investments', retirement: 'investments', crypto: 'investments', business: 'investments', realestate: 'assets', vehicle: 'assets', receivable: 'assets', otherasset: 'assets' };
+export const groupOf = a => (a.kind === 'liability' ? 'debt' : CAT_GROUP[a.category] || 'assets');
+export const groupInfo = id => GROUPS.find(g => g.id === id) || DEBT;
+export const simpleMode = () => getSettings().mode !== 'pro';
+// The breakdown used by charts and tables: simple types in Simple mode, detailed categories in Pro
+export const assetCats = () => (simpleMode() ? GROUPS : ASSET_CATS);
+export const liabCats = () => (simpleMode() ? [DEBT] : LIAB_CATS);
+export const catKey = a => (simpleMode() ? groupOf(a) : a.category);
+export const typeLabel = a => (simpleMode() ? groupInfo(groupOf(a)).label : catLabel(a.category));
+
 export const catInfo = id => ASSET_CATS.find(c => c.id === id) || LIAB_CATS.find(c => c.id === id) || { id, label: id };
 export const catLabel = id => catInfo(id).label;
 export const isLiquid = a => (a.liquid === true || a.liquid === false ? a.liquid : !!catInfo(a.category).liquid);
@@ -102,7 +122,8 @@ export function pointAt(date, snaps = sortedSnaps()) {
     const v = toDisplay(native, ccyOf(a), date);
     p.byAcctNative[a.id] = native;
     p.byAcct[a.id] = v;
-    p.byCat[a.category] = (p.byCat[a.category] || 0) + v;
+    const k = catKey(a);
+    p.byCat[k] = (p.byCat[k] || 0) + v;
     if (a.kind === 'liability') { p.liabilities += v; if (catInfo(a.category).shortTerm) p.shortDebt += v; }
     else {
       p.assets += v; if (isLiquid(a)) p.liquid += v; if (isInvestable(a)) p.investable += v;

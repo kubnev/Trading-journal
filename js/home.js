@@ -3,7 +3,7 @@ import * as store from './store.js';
 import { html, raw, money, pct, num, pnlClass, stat, fmtDate, today, price, rmult } from './ui.js';
 import * as C from './charts.js';
 import { computedTrades, stats, filterTrades, openBook, startingCapital } from './trading/calc.js';
-import { nwSeries, ASSET_CATS } from './networth/calc.js';
+import { nwSeries, assetCats } from './networth/calc.js';
 import { yieldCard, startTicker } from './networth/views.js';
 import { streaks, MOODS } from './journal/views.js';
 import { loadDemo } from './demo.js';
@@ -27,7 +27,7 @@ export default async function home(el) {
       </div>
       <div class="grid g3 mt">
         <div class="card"><h3>Private by design</h3><p class="small muted">Stored in IndexedDB in this browser. No account, no server, no tracking.</p></div>
-        <div class="card"><h3>Simple or Pro</h3><p class="small muted">One switch at the top of the sidebar. Simple keeps the essentials; Pro adds every field, report and chart.</p></div>
+        <div class="card"><h3>Simple or Pro input</h3><p class="small muted">Decides how much you fill in, not what you see. Change it any time in Settings — nothing is lost.</p></div>
         <div class="card"><h3>Need help?</h3><p class="small muted">The <b>?</b> button (top right, or press <kbd>?</kbd>) explains the page you're on.</p></div>
       </div>`);
     el.querySelector('[data-demo]').onclick = async () => { await loadDemo(); refresh(); };
@@ -85,8 +85,8 @@ export default async function home(el) {
   const p = C.palette();
   if (series.length > 1) C.moneyLine(el.querySelector('#o-nw'), { labels: series.map(x => fmtDate(x.date, { month: 'short', year: '2-digit' })), series: [{ label: 'Net worth', data: series.map(x => x.net), color: p.accent, fill: true }] });
   if (cur && cur.assets > 0) {
-    const cats = ASSET_CATS.filter(c => (cur.byCat[c.id] || 0) > 0);
-    C.doughnut(el.querySelector('#o-alloc'), { labels: cats.map(c => c.label), values: cats.map(c => cur.byCat[c.id]), colors: cats.map(c => p.series[ASSET_CATS.indexOf(c) % 8]), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
+    const all = assetCats(), cats = all.filter(c => (cur.byCat[c.id] || 0) > 0);
+    C.doughnut(el.querySelector('#o-alloc'), { labels: cats.map(c => c.label), values: cats.map(c => cur.byCat[c.id]), colors: cats.map(c => p.series[all.indexOf(c) % 8]), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
   }
   const tick = startTicker(el);
   return () => clearInterval(tick);

@@ -1,0 +1,70 @@
+// Simple vs Pro is a choice of how you ENTER information, not of what you can see.
+// Every page, chart and report is the same in both. Chosen once at first launch; changeable in Settings.
+import * as store from './store.js';
+import { html, modal, toast } from './ui.js';
+
+const SIMPLE = {
+  title: 'Simple',
+  lead: 'Quick, plain-language input.',
+  points: [
+    'Accounts are one of six types: Cash, Savings, Trading capital, Investments, Assets, Debt',
+    'Trades: symbol, entry, exit, stop and a short thesis',
+    'Daily journal: mood, energy, sleep, habits and a short reflection',
+    'Everything else (liquidity, custody, purpose…) is worked out for you',
+  ],
+};
+const PRO = {
+  title: 'Pro',
+  lead: 'Detailed input for deeper analysis.',
+  points: [
+    '11 asset and 8 debt categories (retirement, real estate, vehicles, mortgage…)',
+    'Set custody, purpose, liquidity and FI status per account',
+    'Trades: catalyst, regime, conviction, MAE/MFE, grade, mistakes, screenshots',
+    'Journal: focus, discipline, market bias, watchlist, day tags',
+  ],
+};
+const card = (m, id, current) => html`<button type="button" class="mode-card ${current === id ? 'on' : ''}" data-pick="${id}">
+  <span class="mode-title">${m.title}${current === id ? html` <span class="tag accent">current</span>` : ''}</span><span class="mode-lead">${m.lead}</span>
+  <ul>${m.points.map(p => html`<li>${p}</li>`)}</ul></button>`;
+
+export const modeChosen = () => !!store.getSettings().modeChosen;
+export const modeName = () => (store.getSettings().mode === 'pro' ? 'Pro' : 'Simple');
+
+// First launch: a deliberate choice
+export function chooserView(el, onDone) {
+  el.innerHTML = String(html`<div class="mode-choose">
+    <h1>How do you want to enter your data?</h1>
+    <p class="muted">Both show every chart, report and analysis. The difference is how much detail you fill in when you add an account, a trade or a journal entry. You can change this later in Settings.</p>
+    <div class="mode-cards">${card(SIMPLE, 'simple')}${card(PRO, 'pro')}</div>
+    <p class="small muted">Not sure? Pick Simple — you can upgrade any time without losing anything.</p></div>`);
+  el.querySelectorAll('[data-pick]').forEach(b => b.onclick = async () => {
+    await store.saveSettings({ mode: b.dataset.pick, modeChosen: true });
+    onDone();
+  });
+}
+
+// Settings card
+export function modeCard() {
+  const cur = store.getSettings().mode === 'pro' ? 'pro' : 'simple';
+  return html`<div class="card" id="mode-card"><div class="card-head"><h2>Input mode</h2><span class="hint">currently ${modeName()}</span></div>
+    <p class="small muted">Changes how much you fill in — not what you can see. Every page and chart is available in both.</p>
+    <div class="mode-cards compact">${card(SIMPLE, 'simple', cur)}${card(PRO, 'pro', cur)}</div></div>`;
+}
+
+export async function switchMode(to) {
+  const from = store.getSettings().mode === 'pro' ? 'pro' : 'simple';
+  if (to === from) return false;
+  const nAcc = store.all('nwAccounts').length;
+  const body = to === 'pro'
+    ? `<p>Pro splits your accounts into finer categories — e.g. <b>Investments</b> becomes taxable investments, retirement, crypto or business; <b>Assets</b> becomes real estate, vehicles or other assets.</p>
+       ${nAcc ? `<p>Your ${nAcc} account${nAcc === 1 ? ' is' : 's are'} placed in the closest Pro category automatically. <b>Review them on Accounts</b> and adjust the category, custody, purpose and liquidity where it matters — your analytics get more accurate.</p>` : ''}
+       <p class="small muted">Trade and journal forms also get their extra fields.</p>`
+    : `<p>Simple groups everything into six types: Cash, Savings, Trading capital, Investments, Assets and Debt.</p>
+       ${nAcc ? `<p><b>Nothing is deleted or reset.</b> Each detailed category falls into one of the six types, and the details you set (category, custody, purpose…) are kept — they come back if you switch to Pro again.</p>` : ''}
+       <p class="small muted">Extra Pro fields are hidden from the forms; values you already entered stay on your trades and journal.</p>`;
+  const ok = await modal({ title: `Switch to ${to === 'pro' ? 'Pro' : 'Simple'} input?`, body, actions: [{ label: 'Cancel' }, { label: `Switch to ${to === 'pro' ? 'Pro' : 'Simple'}`, kind: 'primary', value: () => true }] });
+  if (ok !== true) return false;
+  await store.saveSettings({ mode: to, modeChosen: true, reviewAccounts: to === 'pro' && nAcc > 0 });
+  toast(`Switched to ${to === 'pro' ? 'Pro' : 'Simple'} input`);
+  return true;
+}
