@@ -116,6 +116,10 @@ export function modal({ title, body, actions = [], wide = false, onMount }) {
     const onKey = e => { if (e.key === 'Escape') close(null); };
     document.addEventListener('keydown', onKey);
     wrap.addEventListener('mousedown', e => { if (e.target === wrap) close(null); });
+    // Enter inside a dialog form = the main button (a real form submit would reload the page)
+    const primary = () => wrap.querySelector('footer button:last-child')?.click();
+    wrap.addEventListener('submit', e => { e.preventDefault(); primary(); });
+    wrap.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.target.matches('input:not([type=checkbox]):not([type=file]), select')) { e.preventDefault(); primary(); } });
     wrap.querySelector('[data-close]').onclick = () => close(null);
     wrap.querySelectorAll('[data-act]').forEach(b => {
       b.onclick = async () => {

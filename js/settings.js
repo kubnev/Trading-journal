@@ -4,6 +4,7 @@ import { loadDemo, removeDemo, hasDemo } from './demo.js';
 import { exportTradesCSV, importTradesCSVDialog } from './trading/csv.js';
 import { refresh } from './main.js';
 import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
+import { exportBackupFlow, importBackupFlow } from './backup.js';
 
 import { CURRENCIES, refreshRates, currenciesInUse, otherCurrencies, ratesAt, rate, usingFallback, migrateCurrencies } from './fx.js';
 
@@ -58,7 +59,7 @@ export default async function settingsView(el) {
       <div class="stack">
         <div class="card">
           <div class="card-head"><h2>Backup & restore</h2></div>
-          <p class="small muted">Your data lives only in this browser${persisted ? ' (persistent storage granted)' : ''}. Clearing site data, switching browsers or devices loses it — keep a backup.</p>
+          <p class="small muted">Your data lives only in this browser${persisted ? ' (persistent storage granted)' : ''}. Clearing site data, switching browsers or devices loses it — keep a backup. Backups are <b>encrypted with a password you choose</b> (AES-256); restoring asks for it.</p>
           <div class="row">
             <button class="btn primary" data-act="export">Export full backup (.json)</button>
             <button class="btn" data-act="export-lite">Export without screenshots</button>
@@ -75,7 +76,7 @@ export default async function settingsView(el) {
 
         <div class="card">
           <div class="card-head"><h2>Trades CSV</h2></div>
-          <p class="small muted">Import round-trip trades from any broker export or spreadsheet — you map the columns. Export gives one row per trade with all computed metrics.</p>
+          <p class="small muted">Import round-trip trades from any broker export or spreadsheet — you map the columns. Export gives one row per trade with all computed metrics. <b>CSV files are not encrypted</b> — use a backup for safekeeping.</p>
           <div class="row">
             <button class="btn" data-act="csv-import">Import trades from CSV…</button>
             <button class="btn" data-act="csv-export">Export trades CSV</button>
@@ -109,7 +110,7 @@ export default async function settingsView(el) {
 
         <div class="card">
           <div class="card-head"><h2>Danger zone</h2></div>
-          <p class="small muted">Delete everything stored by this site in this browser. Export a backup first.</p>
+          <p class="small muted">Wipe every trade, journal entry, screenshot, account, snapshot and setting (including your Finnhub key) from this browser. Export a backup first if you want to keep anything.</p>
           <button class="btn danger" data-act="wipe">Delete all data…</button>
         </div>
       </div>
@@ -153,10 +154,7 @@ export default async function settingsView(el) {
         await applyUpdate(u.files);
       } catch (err) { out.textContent = 'Could not check: ' + err.message; }
     } else if (a === 'export' || a === 'export-lite') {
-      const b = await store.exportBackup({ includeImages: a === 'export' });
-      download(`journal-backup-${today()}.json`, JSON.stringify(b));
-      await store.saveSettings({ lastBackupAt: new Date().toISOString() });
-      toast('Backup downloaded');
+      if (await exportBackupFlow({ includeImages: a === 'export' })) refresh();
     } else if (a === 'csv-export') {
       exportTradesCSV();
     } else if (a === 'csv-import') {
@@ -168,27 +166,16 @@ export default async function settingsView(el) {
     } else if (a === 'wipe') {
       const ok = await modal({
         title: 'Delete all data?',
-        body: `<p>This permanently deletes every trade, journal entry, screenshot, account and snapshot stored in this browser. It cannot be undone.</p><label class="field">Type <b>DELETE</b> to confirm<input name="c" autocomplete="off"></label>`,
+        body: `<p>This permanently deletes every trade, journal entry, screenshot, account, snapshot and setting stored in this browser. It cannot be undone.</p><label class="field">Type <b>DELETE</b> to confirm<input name="c" autocomplete="off"></label>`,
         actions: [{ label: 'Cancel' }, { label: 'Delete everything', kind: 'danger', value: w => (w.querySelector('[name=c]').value === 'DELETE' ? true : (toast('Type DELETE to confirm', 'error'), false)) }],
       });
-      if (ok === true) { await store.clearAll(); toast('All data deleted'); refresh(); }
+      if (ok === true) { await store.wipeEverything(); toast('All data deleted'); refresh(); }
     }
   });
 
   el.querySelector('[data-act=import]').onchange = async e => {
     const f = e.target.files[0];
     e.target.value = '';
-    if (!f) return;
-    let obj;
-    try { obj = JSON.parse(await readFileText(f)); } catch { toast('Could not read that file as JSON', 'error'); return; }
-    const mode = await modal({
-      title: 'Restore backup',
-      body: `<p>Backup from <b>${esc(obj.exportedAt ? new Date(obj.exportedAt).toLocaleString() : 'unknown date')}</b>.</p><p class="small muted"><b>Replace</b> deletes current data first. <b>Merge</b> adds the backup's records and overwrites records with the same id.</p>`,
-      actions: [{ label: 'Cancel' }, { label: 'Merge', value: () => 'merge' }, { label: 'Replace all', kind: 'primary', value: () => 'replace' }],
-    });
-    if (mode !== 'merge' && mode !== 'replace') return;
-    if (mode === 'replace' && !(await confirmDlg('Replace all data?', 'Current data in this browser will be deleted and replaced by the backup.', 'Replace'))) return;
-    try { await store.importBackup(obj, { mode }); await migrateCurrencies(); toast('Backup restored'); refresh(); refreshRates().then(r => { if (r && !r.skipped) refresh(); }).catch(() => {}); }
-    catch (err) { toast(err.message, 'error'); }
+    if (f && (await importBackupFlow(f))) refresh();
   };
 }

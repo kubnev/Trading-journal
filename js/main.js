@@ -9,6 +9,7 @@ import * as T from './trading/views.js';
 import * as N from './networth/views.js';
 import * as J from './journal/views.js';
 import { openHelp, maybeStartTour } from './help.js';
+import { exportBackupFlow } from './backup.js';
 import { migrateCurrencies, refreshRates, ensureRates, currenciesInUse, usingFallback } from './fx.js';
 
 // Grouped navigation. `pro: true` items only appear in Pro mode.
@@ -187,10 +188,7 @@ function notices(page, only) {
     d.querySelector('[data-n]').onclick = async () => {
       if (k === 'update') return applyUpdate(updateInfo.files);
       if (k === 'fx') { const r = await refreshRates({ force: true }); toast(r.ok ? 'Exchange rates loaded' : 'Still offline: ' + (r.errors || []).join(' '), r.ok ? 'info' : 'error'); return route(); }
-      const b = await store.exportBackup();
-      download(`journal-backup-${today()}.json`, JSON.stringify(b));
-      await store.saveSettings({ lastBackupAt: new Date().toISOString() });
-      toast('Backup downloaded'); d.remove();
+      if (await exportBackupFlow()) d.remove();
     };
     d.querySelector('[data-x]').onclick = () => { dismissed.add(k); d.remove(); };
     page.prepend(d);

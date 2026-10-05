@@ -72,6 +72,7 @@ function merge(base, over) {
   if (!over || typeof over !== 'object' || Array.isArray(over)) return over === undefined ? base : over;
   const out = { ...base };
   for (const k of Object.keys(over)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     out[k] = base && typeof base[k] === 'object' && !Array.isArray(base[k]) && base[k] !== null ? merge(base[k], over[k]) : over[k];
   }
   return out;
@@ -187,7 +188,14 @@ async function allImages() {
 
 // ---------- backup ----------
 const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
-const dataURLToBlob = async u => (await fetch(u)).blob();
+// decoded by hand (no fetch), so the page never needs to load anything from a URL in a backup
+const dataURLToBlob = async u => {
+  const m = /^data:([\w/+.-]+);base64,(.*)$/s.exec(u);
+  if (!m) throw new Error('Backup is damaged (an image is not a valid picture).');
+  const bin = atob(m[2]); const a = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return new Blob([a], { type: m[1] });
+};
 
 export async function exportBackup({ includeImages = true } = {}) {
   const out = { app: 'ledgerline', version: 1, exportedAt: new Date().toISOString(), settings, data: {} };
@@ -199,8 +207,47 @@ export async function exportBackup({ includeImages = true } = {}) {
   return out;
 }
 
+// Check the whole file before anything is written, so a damaged or crafted file can never
+// leave you with half your data deleted.
+const isObj = o => o && typeof o === 'object' && !Array.isArray(o);
+const okId = id => (typeof id === 'string' && id.length > 0 && id.length < 200) || Number.isFinite(id);
+export function validateBackup(obj) {
+  if (!isObj(obj) || obj.app !== 'ledgerline' || !isObj(obj.data)) throw new Error('This file is not a backup from this app.');
+  for (const c of COLLECTIONS) {
+    const list = obj.data[c];
+    if (list == null) continue;
+    if (!Array.isArray(list)) throw new Error(`Backup is damaged ("${c}" is not a list).`);
+    for (const o of list) if (!isObj(o) || !okId(o.id)) throw new Error(`Backup is damaged (a record in "${c}" has no id).`);
+  }
+  if (obj.images != null) {
+    if (!Array.isArray(obj.images)) throw new Error('Backup is damaged (images).');
+    for (const im of obj.images) if (!isObj(im) || !okId(im.id) || typeof im.data !== 'string' || !/^data:image\/(png|jpeg|gif|webp|bmp|avif);base64,/i.test(im.data)) throw new Error('Backup is damaged (an image is not a valid picture).');
+  }
+  if (obj.settings != null && !isObj(obj.settings)) throw new Error('Backup is damaged (settings).');
+  return true;
+}
+// Only known settings, with values the app can actually use (a bad locale or currency would break formatting)
+function cleanSettings(s) {
+  const out = {};
+  for (const k of Object.keys(DEFAULT_SETTINGS).concat(['fx', 'plan', 'tour'])) if (k in s) out[k] = s[k];
+  const okIntl = (fn) => { try { fn(); return true; } catch { return false; } };
+  if (out.currency != null && !(out.currency === 'USDT' || (typeof out.currency === 'string' && okIntl(() => new Intl.NumberFormat('en', { style: 'currency', currency: out.currency }))))) delete out.currency;
+  if (out.locale != null && !(typeof out.locale === 'string' && okIntl(() => new Intl.NumberFormat(out.locale)))) out.locale = undefined;
+  if (!['auto', 'light', 'dark'].includes(out.theme)) delete out.theme;
+  if (!['greenred', 'blueorange'].includes(out.pnlColors)) delete out.pnlColors;
+  if (!['simple', 'pro'].includes(out.mode)) delete out.mode;
+  const strList = v => Array.isArray(v) && v.every(x => typeof x === 'string');
+  for (const k of ['habits', 'dayTags']) if (k in out && !strList(out[k])) delete out[k];
+  if ('tagLists' in out) { if (!isObj(out.tagLists)) delete out.tagLists; else for (const k of Object.keys(out.tagLists)) if (!strList(out.tagLists[k])) delete out.tagLists[k]; }
+  for (const k of ['fx', 'plan', 'tour', 'priceApi']) if (k in out && !isObj(out[k])) delete out[k];
+  return out;
+}
+
 export async function importBackup(obj, { mode = 'replace' } = {}) {
-  if (!obj || obj.app !== 'ledgerline' || !obj.data) throw new Error('This file is not a Ledgerline backup.');
+  validateBackup(obj);
+  // decode images first: if one fails, nothing has been deleted yet
+  const images = [];
+  for (const im of obj.images || []) images.push({ id: im.id, blob: await dataURLToBlob(im.data) });
   if (mode === 'replace') await clearAll({ keepSettings: true });
   for (const c of COLLECTIONS) if (Array.isArray(obj.data[c]) && obj.data[c].length) {
     const tx = db.transaction(c, 'readwrite');
@@ -211,15 +258,12 @@ export async function importBackup(obj, { mode = 'replace' } = {}) {
     }
     await txDone(tx);
   }
-  if (Array.isArray(obj.images)) {
-    for (const im of obj.images) {
-      const blob = await dataURLToBlob(im.data);
-      const tx = db.transaction(BLOB_STORE, 'readwrite');
-      tx.objectStore(BLOB_STORE).put({ id: im.id, blob, type: blob.type });
-      await txDone(tx);
-    }
+  for (const { id, blob } of images) {
+    const tx = db.transaction(BLOB_STORE, 'readwrite');
+    tx.objectStore(BLOB_STORE).put({ id, blob, type: blob.type });
+    await txDone(tx);
   }
-  if (obj.settings && mode === 'replace') await saveSettings(obj.settings);
+  if (obj.settings && mode === 'replace') await saveSettings(cleanSettings(obj.settings));
   emit('*');
 }
 
@@ -231,6 +275,12 @@ export async function clearAll({ keepSettings = false } = {}) {
   for (const c of COLLECTIONS) mem[c] = [];
   if (!keepSettings) settings = structuredClone(DEFAULT_SETTINGS);
   emit('*');
+}
+
+// "Delete all data": every record, screenshot and setting, plus this app's small browser keys
+export async function wipeEverything() {
+  await clearAll();
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith('tj.')) localStorage.removeItem(k); } catch {}
 }
 
 export async function storageEstimate() {

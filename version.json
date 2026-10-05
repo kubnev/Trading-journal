@@ -1,9 +1,11 @@
 {
-  "version": "0.5.1",
-  "notes": "Full audit: bug fixes across trading, net worth, journal, currencies, CSV import and mobile layout.",
+  "version": "0.6.0",
+  "notes": "Password-encrypted backups, safer restore, full wipe, Content-Security-Policy.",
   "files": [
     "css/app.css",
+    "js/backup.js",
     "js/charts.js",
+    "js/crypto.js",
     "js/demo.js",
     "js/fx.js",
     "js/help.js",
@@ -15,6 +17,7 @@
     "js/networth/views.js",
     "js/settings.js",
     "js/store.js",
+    "js/theme-boot.js",
     "js/trading/calc.js",
     "js/trading/common.js",
     "js/trading/csv.js",
