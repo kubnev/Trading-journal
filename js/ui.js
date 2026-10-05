@@ -167,7 +167,7 @@ export const empty = (title, text, action = '') => html`<div class="empty"><div 
 
 // Stat tile
 export function stat(label, value, { cls = '', sub = '', help = '' } = {}) {
-  return html`<div class="stat" ${help ? raw(`title="${esc(help)}"`) : ''}><div class="stat-label">${label}${help ? raw(' <span class="help">?</span>') : ''}</div><div class="stat-value ${cls}">${value}</div>${sub ? html`<div class="stat-sub">${sub}</div>` : ''}</div>`;
+  return html`<div class="stat"><div class="stat-label">${label}${help ? html` <span class="tip" tabindex="0" role="button" aria-label="Help: ${help}" data-tip="${help}">?</span>` : ''}</div><div class="stat-value ${cls}">${value}</div>${sub ? html`<div class="stat-sub">${sub}</div>` : ''}</div>`;
 }
 
 // Simple chip-input for tags drawn from a list, allowing new entries

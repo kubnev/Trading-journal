@@ -10,6 +10,7 @@ import * as N from './networth/views.js';
 import * as J from './journal/views.js';
 import { openHelp, maybeStartTour } from './help.js';
 import { exportBackupFlow } from './backup.js';
+import { initTips } from './tips.js';
 import { migrateCurrencies, refreshRates, ensureRates, currenciesInUse, usingFallback } from './fx.js';
 
 // Grouped navigation. `pro: true` items only appear in Pro mode.
@@ -205,6 +206,7 @@ async function boot() {
     return;
   }
   applyTheme();
+  initTips();
   // In Auto mode, follow OS light/dark changes live (charts re-render with new colours)
   darkMQ.addEventListener('change', () => { if ((store.getSettings().theme || 'auto') === 'auto') softRoute(); });
   window.addEventListener('hashchange', route);

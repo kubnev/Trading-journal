@@ -165,7 +165,10 @@ kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 
 .stat-value { font-family: var(--font-serif); font-size: 22px; font-weight: 550; font-variant-numeric: lining-nums; margin-top: 4px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stats.big .stat-value { font-size: 27px; }
 .stat-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.help { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--border-strong); font-size: 9px; cursor: help; }
+.tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin: 0 2px 0 5px; vertical-align: 1px; border-radius: 50%; border: 1px solid var(--border-strong); color: var(--text-3); font: 600 10px/1 inherit; font-family: inherit; text-transform: none; letter-spacing: 0; cursor: help; user-select: none; flex: none; }
+.tip:hover, .tip:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.tip-bubble { position: fixed; z-index: 1000; max-width: min(300px, calc(100vw - 16px)); padding: 8px 11px; border-radius: 8px; background: var(--text-1); color: var(--bg); font-size: 12.5px; line-height: 1.45; font-weight: 450; text-transform: none; letter-spacing: 0; box-shadow: 0 4px 16px rgba(0, 0, 0, .18); pointer-events: none; }
+.tip-bubble[hidden] { display: none; }
 .meter { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; margin-top: 8px; display: flex; gap: 2px; }
 .meter > span { display: block; height: 100%; border-radius: 3px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; }
@@ -415,3 +418,4 @@ details.fold > summary { cursor: pointer; font-family: var(--font-serif); font-w
 .tour-card h2 { margin: 4px 0 6px; }
 .tour-card p { font-size: 13.5px; color: var(--text-2); }
 .btn.wrap { white-space: normal; text-align: left; max-width: 100%; height: auto; }
+.field-label { display: inline; }

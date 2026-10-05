@@ -1,6 +1,6 @@
 {
-  "version": "0.6.0",
-  "notes": "Password-encrypted backups, safer restore, full wipe, Content-Security-Policy.",
+  "version": "0.6.1",
+  "notes": "Help tooltips on every field and table header.",
   "files": [
     "css/app.css",
     "js/backup.js",
@@ -18,6 +18,7 @@
     "js/settings.js",
     "js/store.js",
     "js/theme-boot.js",
+    "js/tips.js",
     "js/trading/calc.js",
     "js/trading/common.js",
     "js/trading/csv.js",
