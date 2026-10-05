@@ -131,8 +131,6 @@ kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 
 .nav a:hover, .sidebar-foot a:hover, .theme-btn:hover { background: var(--surface-2); color: var(--text-1); text-decoration: none; }
 .nav a.active, .sidebar-foot a.active { background: var(--accent-soft); color: var(--accent); }
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
-.local-badge { font-size: 11px; color: var(--text-3); padding: 8px 10px 0; }
-.local-badge::first-letter { color: var(--pnl-pos); }
 
 .page > .page-head:first-child, .page > .notice:first-child { margin-right: 46px; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
