@@ -88,7 +88,7 @@ export function moneyLine(canvas, { labels, series, zero = false, stepped = fals
         tension: s.tension ?? 0.15,
         stepped,
         borderDash: s.dash || [],
-        pointRadius: s.points ? 2 : 0,
+        pointRadius: s.points ? 2 : labels.length <= 3 ? 4 : 0,
         segment: s.segment,
       })),
     },

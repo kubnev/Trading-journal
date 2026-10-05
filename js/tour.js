@@ -6,28 +6,26 @@ import { esc } from './ui.js';
 import { loadDemo, removeDemo } from './demo.js';
 
 const STEPS = [
-  { title: 'Welcome to Ledgerline', text: 'A private tracker for <b>what you\'re worth</b> — and, second, <b>where your money goes</b>. This tour uses <b>sample data</b> so every chart has something in it; it\'s deleted when the tour ends.', demoNote: true },
-  { route: '/', sel: '[data-tour=nw-stats]', title: 'Your net worth at a glance', text: 'Net worth, how it changed over the past 12 months, what you could reach within days (liquid net worth) and your savings rate. Numbers marked <span class="tag est">estimate</span> use your starting estimates until you have a month of real data.' },
-  { route: '/', sel: '[data-tour=nw-chart]', title: 'The trend that matters', text: 'Every time you update balances, a point is added here. Monthly is the sweet spot.' },
-  { route: '/', sel: '[data-tour=fi]', title: 'Financial independence', text: 'How far your invested money is toward the amount that could cover your spending for good — and how long it takes at your current pace.' },
-  { route: '/networth/accounts', sel: '#main .page-head .actions', title: 'Accounts', text: 'Add everything you own and owe: cash, savings, trading capital, investments, things you own, debts. Each keeps its own currency. Crypto and stocks can list holdings with live prices.' },
-  { route: '/networth/update', sel: '#uf', title: 'Update balances', text: 'Once a month, type what each account is worth. Values are pre-filled with the last ones — change only what moved. Savings with a yield (APY) grow by themselves in between.' },
-  { route: '/networth', sel: '#n-line', up: '.card', title: 'Net worth over time', text: 'Assets, debts and net worth over time, with how much of each change came from saving vs markets.' },
-  { route: '/networth/analytics', sel: '[data-tour=health]', title: 'Analytics', text: 'Where your money is held (bank, broker, exchange, wallet…), what it\'s for, how liquid and concentrated it is — and a balance-sheet health check.' },
-  { route: '/networth/plan', sel: '#pf', title: 'FI planning', text: 'Set your expected return, inflation and withdrawal rate. Your spending (or your estimate) gives the FI number; the projection shows when you could get there.' },
-  { route: '/spending', sel: '#s-pace', up: '.card', title: 'Spending, month by month', text: 'Second part of the app: where money goes. Spending through the month vs last month and your budget, with a month-end projection.' },
-  { route: '/spending', sel: '.topbar [data-quick-add], [data-tour=add]', title: 'Log an expense in seconds', text: 'Amount, category, done — from any page with this button or the <kbd>N</kbd> key.' },
-  { route: '/spending/transactions', sel: '.txn-list', title: 'Transactions', text: 'Everything you logged, by day. Click to edit. You can import your bank\'s CSV export too.' },
-  { route: '/spending/calendar', sel: '.cal', title: 'Calendar', text: 'What you spent each day, income, and the bills coming up (🔁).' },
-  { route: '/spending/budgets', sel: '#bf', title: 'Budgets', text: 'A monthly limit overall and per category, with a safe amount to spend per day.' },
+  { title: 'Welcome to Ledgerline', text: 'A private tracker for <b>where your money sits</b>, what it earns and the moves you plan — plus <b>where it goes</b> and a short daily journal. This tour uses <b>sample data</b> so every chart has something in it; it\'s deleted when the tour ends.', demoNote: true },
+  { route: '/', sel: '[data-tour=nw-stats]', title: 'Your money at a glance', text: 'Net worth, how it changed over the past 12 months, what you could reach within days (liquid net worth) and what your money earns in interest per month. Numbers marked <span class="tag est">estimate</span> use your starting estimates until there\'s real history.' },
+  { route: '/', sel: '[data-tour=nw-chart]', title: 'Snapshots build the trend', text: 'No income to log: every time you update balances, a snapshot is added here. Every few weeks or monthly is plenty.' },
+  { route: '/', sel: '[data-tour=moves]', title: 'Planned moves', text: 'The transfers you intend to make — take profits off an exchange, top up savings, pay down a card. Mark one done and both balances update.' },
+  { route: '/networth/accounts', sel: '.acct-group', up: null, title: 'Accounts, grouped by type', text: 'Everything you own and owe — bank, savings, exchanges, brokers, wallets, things you own, debts — grouped by type with totals. Each keeps its own currency; crypto and stocks can list holdings with live prices.' },
+  { route: '/networth/update', sel: '#uf', title: 'Update balances', text: 'Type what each account is worth. Values are pre-filled with the last ones — change only what moved. Accounts with an APY grow by themselves in between.' },
+  { route: '/networth/moves', sel: '#main .card', title: 'Moves', text: 'Plan transfers between your accounts, see the interest each one gains or loses, and tick them off. Your target allocation (Analytics) suggests what to move when you drift.' },
+  { route: '/networth/interest', sel: '#main .stats', title: 'Interest follow-up', text: 'What every yield account earns per day, month and year, what you\'ve earned this year, what your debts cost — and money sitting idle that earns nothing.' },
+  { route: '/networth/analytics', sel: '[data-tour=health]', title: 'Analytics', text: 'Where your money is held (bank, broker, exchange, wallet…), what it\'s for, how liquid and concentrated it is, a balance-sheet check and your target allocation.' },
+  { route: '/spending', sel: '#s-pace', up: '.card', title: 'Spending, month by month', text: 'Where money goes: spending through the month vs last month and your budget, with a month-end projection.' },
+  { route: '/spending', sel: '.topbar [data-quick-add], [data-tour=add]', title: 'Log an expense in seconds', text: 'Amount, category, done — from any page with this button or the <kbd>N</kbd> key. Optionally pick the account it was paid from and take it off that balance.' },
   { route: '/spending/recurring', sel: '#main .tabs', title: 'Subscriptions & bills', text: 'Each subscription with the day it\'s charged and the account it comes from — added automatically, with monthly and yearly totals.' },
-  { route: '/settings', sel: '#est-card', title: 'Starting estimates', text: 'Change your estimates here any time. The app tells you when your real averages have taken over.' },
+  { route: '/journal', sel: '#jf fieldset', title: 'Journal', text: 'A two-minute daily check-in: mood, energy, stress, sleep, habits and what\'s on your mind.' },
+  { route: '/journal/insights', sel: '[data-tour=mood-spend]', title: 'How you feel vs what you spend', text: 'Insights compares your everyday spending on good and bad days, calm and stressed days — emotional spending shows up here.' },
   { route: '/settings', sel: '[data-act=export]', title: 'Back up', text: 'Your data lives only in this browser. Export a password-protected backup regularly — you\'ll get a weekly reminder.' },
   { sel: '[data-tour=help]', title: 'Help any time', text: 'Press <b>?</b> for help about the page you\'re on. Every field has its own <b>?</b> too. That\'s it — the sample data is removed when you click Done.' },
 ];
 
 let tourEl = null, step = 0, withDemo = false, token = 0;
-const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots'].some(c => store.all(c).some(x => !x.demo));
+const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots', 'nwMoves', 'days'].some(c => store.all(c).some(x => !x.demo));
 
 export async function startTour({ demo = true } = {}) {
   await endTour({ silent: true });

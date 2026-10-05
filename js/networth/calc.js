@@ -4,19 +4,18 @@ import { toDisplay, ccyOf } from '../fx.js';
 import { today, monthKey, parseDay } from '../ui.js';
 
 // liquid: can be turned into cash within days without major loss
-// investable: counts toward financial-independence assets (excludes home, car, personal items)
 export const ASSET_CATS = [
-  { id: 'cash', label: 'Cash & checking', liquid: true, investable: false },
-  { id: 'savings', label: 'Savings & money market', liquid: true, investable: false },
-  { id: 'brokerage', label: 'Taxable investments', liquid: true, investable: true },
-  { id: 'trading', label: 'Trading accounts', liquid: true, investable: true },
-  { id: 'retirement', label: 'Retirement & pension', liquid: false, investable: true },
-  { id: 'crypto', label: 'Crypto', liquid: true, investable: true },
-  { id: 'realestate', label: 'Real estate', liquid: false, investable: false },
-  { id: 'business', label: 'Business equity', liquid: false, investable: true },
-  { id: 'vehicle', label: 'Vehicles', liquid: false, investable: false },
-  { id: 'receivable', label: 'Money owed to you', liquid: false, investable: false },
-  { id: 'otherasset', label: 'Other assets', liquid: false, investable: false },
+  { id: 'cash', label: 'Cash & checking', liquid: true },
+  { id: 'savings', label: 'Savings & money market', liquid: true },
+  { id: 'brokerage', label: 'Taxable investments', liquid: true },
+  { id: 'trading', label: 'Trading accounts', liquid: true },
+  { id: 'retirement', label: 'Retirement & pension', liquid: false },
+  { id: 'crypto', label: 'Crypto', liquid: true },
+  { id: 'realestate', label: 'Real estate', liquid: false },
+  { id: 'business', label: 'Business equity', liquid: false },
+  { id: 'vehicle', label: 'Vehicles', liquid: false },
+  { id: 'receivable', label: 'Money owed to you', liquid: false },
+  { id: 'otherasset', label: 'Other assets', liquid: false },
 ];
 export const LIAB_CATS = [
   { id: 'mortgage', label: 'Mortgage', shortTerm: false },
@@ -51,7 +50,6 @@ export const typeLabel = a => (simpleMode() ? groupInfo(groupOf(a)).label : catL
 export const catInfo = id => ASSET_CATS.find(c => c.id === id) || LIAB_CATS.find(c => c.id === id) || { id, label: id };
 export const catLabel = id => catInfo(id).label;
 export const isLiquid = a => (a.liquid === true || a.liquid === false ? a.liquid : !!catInfo(a.category).liquid);
-export const isInvestable = a => (a.investable === true || a.investable === false ? a.investable : !!catInfo(a.category).investable);
 
 // Where the money sits — counterparty / custody risk
 export const CUSTODY = [
@@ -114,7 +112,7 @@ export function yieldSummary(now = new Date()) {
 export function pointAt(date, snaps = sortedSnaps()) {
   const accts = all('nwAccounts');
   // byAcctNative: in each account's own currency; everything else in the display currency
-  const p = { date, assets: 0, liabilities: 0, liquid: 0, investable: 0, shortDebt: 0, byCat: {}, byAcct: {}, byAcctNative: {}, byCustody: {}, byPurpose: {}, byTier: {} };
+  const p = { date, assets: 0, liabilities: 0, liquid: 0, shortDebt: 0, byCat: {}, byAcct: {}, byAcctNative: {}, byCustody: {}, byPurpose: {}, byTier: {} };
   for (const a of accts) {
     const native = valueAt(a, date, snaps);
     const v = toDisplay(native, ccyOf(a), date);
@@ -124,7 +122,7 @@ export function pointAt(date, snaps = sortedSnaps()) {
     p.byCat[k] = (p.byCat[k] || 0) + v;
     if (a.kind === 'liability') { p.liabilities += v; if (catInfo(a.category).shortTerm) p.shortDebt += v; }
     else {
-      p.assets += v; if (isLiquid(a)) p.liquid += v; if (isInvestable(a)) p.investable += v;
+      p.assets += v; if (isLiquid(a)) p.liquid += v;
       const c = custodyOf(a), pu = purposeOf(a), t = tierOf(a);
       p.byCustody[c] = (p.byCustody[c] || 0) + v; p.byPurpose[pu] = (p.byPurpose[pu] || 0) + v; p.byTier[t] = (p.byTier[t] || 0) + v;
     }
@@ -144,113 +142,89 @@ export function nwSeries() {
   return dates.map(d => pointAt(d, snaps));
 }
 
-// ---------- cash flow ----------
-// Monthly income & spending, built from the Spending section's transactions (display currency)
-export function cashflowMonths() {
+// ---------- spending baseline ----------
+// Monthly spending from the Spending section (display currency)
+export function spendMonths() {
   const m = new Map();
   for (const t of all('txns')) {
-    if (t.exclude || !t.date) continue;
-    const k = t.date.slice(0, 7), e = m.get(k) || { id: k, income: 0, expenses: 0 };
-    const v = toDisplay(+t.amount || 0, ccyOf(t), t.date);
-    if (t.type === 'income') e.income += v; else e.expenses += v;
-    m.set(k, e);
+    if (t.exclude || !t.date || t.type === 'income') continue;
+    const k = t.date.slice(0, 7);
+    m.set(k, (m.get(k) || 0) + toDisplay(+t.amount || 0, ccyOf(t), t.date));
   }
-  return [...m.values()].sort((a, b) => a.id.localeCompare(b.id)).map(c => ({ ...c, savings: c.income - c.expenses, rate: c.income ? (c.income - c.expenses) / c.income : null }));
-}
-
-// Averages over the last n months of real data: only complete calendar months after the month
-// you started logging (the first, usually partial, month and the month in progress are left out).
-export function trailing(months, n = 12) {
-  const cur = today().slice(0, 7), first = months[0]?.id;
-  const m = months.filter(x => x.id < cur && x.id > first).slice(-n);
-  const inc = m.reduce((a, x) => a + x.income, 0), exp = m.reduce((a, x) => a + x.expenses, 0);
-  return { months: m.length, income: inc, expenses: exp, savings: inc - exp, rate: inc ? (inc - exp) / inc : null, avgExpenses: m.length ? exp / m.length : null, avgSavings: m.length ? (inc - exp) / m.length : null, avgIncome: m.length ? inc / m.length : null };
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([id, expenses]) => ({ id, expenses }));
 }
 
 // ---------- starting estimates ----------
-// New users give rough monthly numbers; they're used until there's at least MIN_MONTHS complete
-// month(s) of logged transactions, then the real averages take over automatically.
+// Your usual monthly spending: the average over complete calendar months after the month you
+// started logging (the first, usually partial, month and the month in progress are left out).
+// Until there's MIN_MONTHS of that, your starting estimate is used instead.
 export const MIN_MONTHS = 1;
 export const estimates = () => getSettings().estimates || {};
 const estMoney = k => { const e = estimates(); return +e[k] > 0 ? toDisplay(+e[k], e.currency || 'USD') : null; };
-// trailing() shape + which parts are estimates
 export function baseline(n = 12) {
-  const t = trailing(cashflowMonths(), n);
-  const real = t.months >= MIN_MONTHS;
-  const out = { ...t, estimated: { income: false, spending: false }, realMonths: t.months };
-  const eInc = estMoney('income'), eSp = estMoney('spending'), eSave = estMoney('saving');
-  if (!real || !(t.avgIncome > 0)) {
-    if (eInc != null) { out.avgIncome = eInc; out.estimated.income = true; }
-    else if (!real) out.avgIncome = null;
-  }
-  if (!real) {
-    if (eSp != null) { out.avgExpenses = eSp; out.estimated.spending = true; } else out.avgExpenses = null;
-  }
-  if (out.estimated.income || out.estimated.spending) {
-    out.avgSavings = eSave != null && (!real || out.estimated.income) ? eSave : out.avgIncome != null && out.avgExpenses != null ? out.avgIncome - out.avgExpenses : null;
-    out.rate = out.avgIncome ? out.avgSavings / out.avgIncome : null;
-  }
-  out.isEstimate = out.estimated.income || out.estimated.spending;
-  return out;
+  const cur = today().slice(0, 7), months = spendMonths(), first = months[0]?.id;
+  const m = months.filter(x => x.id < cur && x.id > first).slice(-n);
+  const real = m.length >= MIN_MONTHS;
+  const est = real ? null : estMoney('spending');
+  const avgExpenses = real ? m.reduce((a, x) => a + x.expenses, 0) / m.length : est;
+  return { realMonths: m.length, avgExpenses, estimated: { spending: est != null }, isEstimate: est != null };
 }
 // net worth about a year ago: real snapshot history first, otherwise the estimate
 export function yearAgoEstimate() { const e = estimates(), v = e.nwYearAgo; return v === '' || v == null || !isFinite(+v) ? null : toDisplay(+v, e.currency || 'USD'); }
 
-// ---------- financial independence ----------
-export function planInputs() {
-  const pl = getSettings().plan;
-  const t = baseline();
-  // plan amounts are stored in the currency they were typed in
-  const annualExpenses = +pl.annualExpenses ? toDisplay(+pl.annualExpenses, pl.currency || 'USD') : (t.avgExpenses ? t.avgExpenses * 12 : 0);
-  const monthlyContribution = +pl.monthlyContribution ? toDisplay(+pl.monthlyContribution, pl.currency || 'USD') : (t.avgSavings > 0 ? t.avgSavings : 0);
-  const realReturn = (1 + (+pl.expectedReturn || 0) / 100) / (1 + (+pl.inflation || 0) / 100) - 1;
-  return { ...pl, annualExpenses, monthlyContribution, realReturn, derivedExpenses: !+pl.annualExpenses, derivedContribution: !+pl.monthlyContribution, trailing: t };
-}
-
-export function fiMetrics(investable) {
-  const p = planInputs();
-  const fiNumber = p.annualExpenses && p.withdrawalRate ? p.annualExpenses / (p.withdrawalRate / 100) : null;
-  const yearsToRet = Math.max(0, (+p.retirementAge || 0) - (+p.currentAge || 0));
-  const coastNumber = fiNumber ? fiNumber / Math.pow(1 + p.realReturn, yearsToRet) : null;
-  // months until investable assets reach the FI number (real terms)
-  let months = null;
-  if (fiNumber) {
-    if (investable >= fiNumber) months = 0;
-    else {
-      const r = Math.pow(1 + p.realReturn, 1 / 12) - 1;
-      let b = investable;
-      for (let i = 1; i <= 1200; i++) { b = b * (1 + r) + p.monthlyContribution; if (b >= fiNumber) { months = i; break; } }
-    }
-  }
-  return { ...p, fiNumber, progress: fiNumber ? investable / fiNumber : null, coastNumber, coastReached: coastNumber != null && investable >= coastNumber, yearsToFI: months == null ? null : months / 12, fiAge: months == null ? null : (+p.currentAge || 0) + months / 12, yearsToRet };
-}
-
-// Year-by-year projection of investable assets in today's money
-export function projection(investable, years = 40) {
-  const p = planInputs();
+// change in net worth between consecutive balance updates
+export function changes(series) {
   const out = [];
-  let b = investable;
-  const r = Math.pow(1 + p.realReturn, 1 / 12) - 1;
-  for (let y = 0; y <= years; y++) {
-    out.push({ year: y, age: (+p.currentAge || 0) + y, value: b });
-    for (let m = 0; m < 12; m++) b = b * (1 + r) + p.monthlyContribution;
-  }
+  for (let i = 1; i < series.length; i++) out.push({ date: series[i].date, change: series[i].net - series[i - 1].net });
   return out;
 }
 
-// Split each period's change in net worth into savings (from cash-flow log) and market/other
-export function changeDecomposition(series) {
-  const cf = cashflowMonths();
-  const out = [];
-  for (let i = 1; i < series.length; i++) {
-    const a = series[i - 1], b = series[i];
-    const from = monthKey(a.date), to = monthKey(b.date);
-    const inPeriod = cf.filter(c => c.id > from && c.id <= to);
-    const savings = inPeriod.length ? inPeriod.reduce((s, c) => s + c.savings, 0) : null;
-    const change = b.net - a.net;
-    out.push({ date: b.date, change, savings, market: savings == null ? null : change - savings });
-  }
-  return out;
+// ---------- interest ----------
+// APY in force on a date. Each APY change is kept in apyHistory ({ from, apy }), so earlier
+// periods are credited at the rate that applied then.
+export function apyAt(a, date) {
+  const h = [...(a.apyHistory || [])].sort((x, y) => x.from.localeCompare(y.from));
+  if (!h.length) return +a.apy || 0;
+  const e = h.filter(x => x.from <= date).at(-1) || h[0];
+  return +e.apy || 0;
+}
+const daysBetween = (a, b) => (parseDay(b) - parseDay(a)) / 864e5;
+// Interest an account has earned (estimate): between balance updates the recorded balance grows at
+// the APY in force; a new update starts again from what you typed. In the account's own currency.
+export function interestEarned(a, { to = today(), yearStart = `${to.slice(0, 4)}-01-01` } = {}) {
+  const pts = sortedSnaps().filter(s => s.date <= to && s.balances && a.id in s.balances && s.balances[a.id] !== '' && s.balances[a.id] != null).map(s => ({ date: s.date, v: +s.balances[a.id] }));
+  let total = 0, ytd = 0, sinceUpdate = 0;
+  pts.forEach((p, i) => {
+    const end = i + 1 < pts.length ? pts[i + 1].date : to;
+    const r = apyAt(a, p.date);
+    if (!(r > 0) || end <= p.date) return;
+    const earned = grow(p.v, r, daysBetween(p.date, end)) - p.v;
+    total += earned;
+    if (end > yearStart) { const from = p.date > yearStart ? p.date : yearStart; ytd += grow(p.v, r, daysBetween(p.date, end)) - grow(p.v, r, daysBetween(p.date, from)); }
+    if (i === pts.length - 1) sinceUpdate = earned;
+  });
+  return { total, ytd, sinceUpdate, lastUpdate: pts.at(-1)?.date || null, since: pts[0]?.date || null };
+}
+// Interest you earn (yield accounts) and pay (debts with an APR), in the display currency
+export function interestOverview() {
+  const accts = all('nwAccounts').filter(a => !a.archivedAt);
+  const earn = accts.filter(a => a.kind !== 'liability' && +a.apy > 0).map(a => {
+    const native = liveValue(a), value = toDisplay(native, ccyOf(a)), apy = +a.apy;
+    const e = interestEarned(a);
+    return { a, native, value, apy, perYear: value * apy / 100, perMonth: value * apy / 1200, perDay: value * apy / 36500,
+      sinceUpdate: toDisplay(e.sinceUpdate, ccyOf(a)), ytd: toDisplay(e.ytd, ccyOf(a)), total: toDisplay(e.total, ccyOf(a)), lastUpdate: e.lastUpdate, since: e.since };
+  }).sort((x, y) => y.perYear - x.perYear);
+  const now = pointAt(today());
+  const pay = accts.filter(a => a.kind === 'liability' && +a.rate > 0).map(a => {
+    const owed = now.byAcct[a.id] || 0, rate = +a.rate;
+    return { a, owed, rate, perYear: owed * rate / 100, perMonth: owed * rate / 1200 };
+  }).filter(x => x.owed > 0).sort((x, y) => y.perYear - x.perYear);
+  // money not earning anything: liquid assets with no APY (cash, savings, idle exchange balances)
+  const idle = accts.filter(a => a.kind !== 'liability' && !(+a.apy > 0) && ['cash', 'savings'].includes(a.category)).map(a => ({ a, value: now.byAcct[a.id] || 0 })).filter(x => x.value > 0).sort((x, y) => y.value - x.value);
+  const sum = (l, k) => l.reduce((s, x) => s + x[k], 0);
+  const earnValue = sum(earn, 'value');
+  return { earn, pay, idle, earnValue, earnYear: sum(earn, 'perYear'), earnMonth: sum(earn, 'perMonth'), payYear: sum(pay, 'perYear'), payMonth: sum(pay, 'perMonth'),
+    ytd: sum(earn, 'ytd'), total: sum(earn, 'total'), sinceUpdate: sum(earn, 'sinceUpdate'), blended: earnValue ? sum(earn, 'perYear') / earnValue : null, idleValue: sum(idle, 'value') };
 }
 
 export function debtMetrics(point) {
@@ -263,11 +237,10 @@ export function debtMetrics(point) {
 }
 
 // Individual positions for concentration analysis: holdings are split out, other accounts count as one
-export function positions(point, { investableOnly = false } = {}) {
+export function positions(point) {
   const out = [];
   for (const a of all('nwAccounts')) {
     if (a.kind === 'liability' || a.archivedAt) continue;
-    if (investableOnly && !isInvestable(a)) continue;
     const v = point.byAcct[a.id] || 0;
     if (v <= 0) continue;
     if (a.tracksHoldings && (a.holdings || []).length) {

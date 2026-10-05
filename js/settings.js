@@ -52,10 +52,14 @@ export default async function settingsView(el) {
         </form>
 
         <form class="card" id="lists">
-          <div class="card-head"><h2>Payment methods</h2><span class="hint">One per line</span></div>
-          <p class="small muted" style="margin-top:0">Offered on the Pro transaction form. Spending categories are edited on <a href="#/spending/categories">Spending → Categories</a>.</p>
-          <label class="field">Payment methods<textarea name="payMethods" rows="7">${(s.payMethods || []).join('\n')}</textarea></label>
-          <div class="row mt"><span class="spacer"></span><button class="btn primary">Save</button></div>
+          <div class="card-head"><h2>Lists</h2><span class="hint">One per line</span></div>
+          <p class="small muted" style="margin-top:0">Spending categories are edited on <a href="#/spending/categories">Spending → Categories</a>.</p>
+          <div class="form-grid">
+            <label class="field">Payment methods <span class="hint">Pro expense form</span><textarea name="payMethods" rows="7">${(s.payMethods || []).join('\n')}</textarea></label>
+            <label class="field">Journal habits <span class="hint">ticked in the daily check-in</span><textarea name="habits" rows="7">${(s.habits || []).join('\n')}</textarea></label>
+            <label class="field">Journal tags <span class="hint">Pro check-in</span><textarea name="dayTags" rows="7">${(s.dayTags || []).join('\n')}</textarea></label>
+          </div>
+          <div class="row mt"><span class="spacer"></span><button class="btn primary">Save lists</button></div>
         </form>
       </div>
 
@@ -71,7 +75,7 @@ export default async function settingsView(el) {
             <label class="btn">Restore from backup…<input type="file" accept=".json,application/json" data-act="import" hidden></label>
           </div>
           <p class="small muted mt" style="margin-bottom:0">
-            ${counts.txns} transactions · ${counts.recurring} bills & subscriptions · ${counts.nwAccounts} accounts · ${counts.nwSnapshots} balance snapshots
+            ${counts.nwAccounts} accounts · ${counts.nwSnapshots} balance snapshots · ${counts.nwMoves} moves · ${counts.txns} expenses · ${counts.recurring} bills & subscriptions · ${counts.days} journal entries
             ${est ? html`<br>Using ${(est.usage / 1048576).toFixed(1)} MB of local storage.` : ''}
           </p>
         </div>
@@ -134,8 +138,9 @@ export default async function settingsView(el) {
   el.querySelector('#lists').onsubmit = async e => {
     e.preventDefault();
     const lines = v => [...new Set(v.split('\n').map(x => x.trim()).filter(Boolean))].slice(0, 40);
-    await store.saveSettings({ payMethods: lines(formData(e.target).payMethods) });
-    toast('Payment methods saved');
+    const f = formData(e.target);
+    await store.saveSettings({ payMethods: lines(f.payMethods), habits: lines(f.habits), dayTags: lines(f.dayTags) });
+    toast('Lists saved');
   };
 
   el.addEventListener('click', async e => {

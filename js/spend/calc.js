@@ -1,14 +1,14 @@
-// Spending calculations. All amounts are converted to the display currency on the transaction's date.
+// Spending calculations (expenses only — income isn't tracked; net worth comes from balances). All amounts are converted to the display currency on the transaction's date.
 import { all, getSettings, put, putMany } from '../store.js';
 import { toDisplay, ccyOf } from '../fx.js';
 import { today, dayKey, parseDay, pad } from '../ui.js';
 import { kindOf } from './categories.js';
 import { baseline } from '../networth/calc.js';
+import { applyTxnDeduction } from '../networth/ledger.js';
 
 export const val = t => toDisplay(+t.amount || 0, ccyOf(t), t.date);
 const counted = t => !t.exclude && t.date;
 export const expenses = (list = all('txns')) => list.filter(t => counted(t) && t.type !== 'income');
-export const incomes = (list = all('txns')) => list.filter(t => counted(t) && t.type === 'income');
 export const inMonth = (list, m) => list.filter(t => t.date.startsWith(m));
 export const sum = list => list.reduce((s, t) => s + val(t), 0);
 
@@ -42,8 +42,8 @@ export function dailyTotals(list, m) {
 
 // Month summary used by the dashboard, overview and budgets
 export function monthSummary(m = currentMonth()) {
-  const ex = inMonth(expenses(), m), inc = inMonth(incomes(), m);
-  const spent = sum(ex), income = sum(inc);
+  const ex = inMonth(expenses(), m);
+  const spent = sum(ex);
   const n = daysInMonth(m), isCur = m === currentMonth(), isFuture = m > currentMonth();
   const dayNow = isCur ? +today().slice(8, 10) : isFuture ? 0 : n;
   const daily = dailyTotals(ex, m);
@@ -69,7 +69,7 @@ export function monthSummary(m = currentMonth()) {
   const needs = ex.filter(t => kindOf(t) === 'need').reduce((s, t) => s + val(t), 0);
   const wants = spent - needs;
   const biggest = [...ex].sort((a, b2) => val(b2) - val(a))[0] || null;
-  return { m, projectionUsesEstimate: isCur && w < 1 && base.estimated.spending, usualIncome: base.avgIncome, incomeIsEstimate: base.estimated.income, spent, income, saved: income - spent, rate: income ? (income - spent) / income : null, n, dayNow, daily, noSpend, avgDay, projected, due, budget: b.total, left, safeToday, daysLeft, needs, wants, count: ex.length, biggest, ex, inc };
+  return { m, projectionUsesEstimate: isCur && w < 1 && base.estimated.spending, usualSpending: base.avgExpenses, spent, n, dayNow, daily, noSpend, avgDay, projected, due, budget: b.total, left, safeToday, daysLeft, needs, wants, count: ex.length, biggest, ex };
 }
 
 // same point in the previous month, for "vs last month"
@@ -78,8 +78,8 @@ export function spentToDay(m, day) { return sum(expenses().filter(t => t.date.st
 // monthly totals for the last n months (inclusive of m)
 export function monthsBack(m, n) {
   const out = [];
-  for (let i = n - 1; i >= 0; i--) { const k = shiftMonth(m, -i); out.push({ m: k, spent: sum(inMonth(expenses(), k)), income: sum(inMonth(incomes(), k)) }); }
-  return out.map(x => ({ ...x, saved: x.income - x.spent, rate: x.income ? (x.income - x.spent) / x.income : null }));
+  for (let i = n - 1; i >= 0; i--) { const k = shiftMonth(m, -i); out.push({ m: k, spent: sum(inMonth(expenses(), k)) }); }
+  return out;
 }
 // average monthly spend per category over the n complete months before m
 export function categoryAverages(m, n = 3) {
@@ -121,7 +121,7 @@ export function nextDate(r, d) {
 export function upcoming(month, days = 45) {
   const out = [], end = month ? `${month}-31` : dayKey(new Date(Date.now() + days * 864e5));
   for (const r of all('recurring')) {
-    if (r.paused || !r.next) continue;
+    if (r.paused || !r.next || r.type === 'income') continue;
     let d = r.next, guard = 0;
     while (d <= end && guard++ < 60) {
       if (!r.until || d <= r.until) out.push({ r, date: d, type: r.type || 'expense', value: toDisplay(+r.amount || 0, ccyOf(r), d) });
@@ -134,11 +134,11 @@ export function upcoming(month, days = 45) {
 export async function postDueRecurring() {
   const t = today(); let n = 0;
   for (const r of all('recurring')) {
-    if (r.paused || !r.auto || !r.next || r.next > t) continue;
+    if (r.paused || !r.auto || !r.next || r.next > t || r.type === 'income') continue;
     const tx = []; let d = r.next, guard = 0;
     while (d <= t && guard++ < 400) {
       if (r.until && d > r.until) break;
-      tx.push(txnFromRecurring(r, d)); d = nextDate(r, d);
+      tx.push(await applyTxnDeduction(txnFromRecurring(r, d))); d = nextDate(r, d);
     }
     if (tx.length) await putMany('txns', tx);
     await put('recurring', { ...r, next: d });
@@ -146,4 +146,4 @@ export async function postDueRecurring() {
   }
   return n;
 }
-export const txnFromRecurring = (r, date) => ({ type: r.type || 'expense', date, amount: +r.amount, currency: r.currency, category: r.category, sub: r.sub || '', note: r.name, merchant: r.merchant || '', method: r.method || '', accountId: r.accountId || '', recurringId: r.id });
+export const txnFromRecurring = (r, date) => ({ type: 'expense', deduct: !!(r.deduct && r.accountId), date, amount: +r.amount, currency: r.currency, category: r.category, sub: r.sub || '', note: r.name, merchant: r.merchant || '', method: r.method || '', accountId: r.accountId || '', recurringId: r.id });

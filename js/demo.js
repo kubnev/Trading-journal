@@ -1,5 +1,6 @@
-// Realistic sample data: six months of everyday spending, income, bills and budgets, plus a
-// 30-month net-worth history with yields, crypto across custodians and trading capital.
+// Realistic sample data: six months of everyday spending, bills and budgets, a 30-month net-worth
+// history with yields, crypto across custodians and trading capital, planned moves and seven
+// weeks of journal entries.
 // Every record is flagged `demo: true` so it can be removed without touching real entries.
 import * as store from './store.js';
 import { dayKey, monthKey, pad } from './ui.js';
@@ -7,7 +8,7 @@ import { holdingsTotal } from './networth/prices.js';
 import { nextDate } from './spend/calc.js';
 
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-const COLS = ['nwAccounts', 'nwSnapshots', 'txns', 'recurring'];
+const COLS = ['nwAccounts', 'nwSnapshots', 'nwMoves', 'txns', 'recurring', 'days'];
 
 export const hasDemo = () => COLS.some(c => store.all(c).some(x => x.demo));
 export async function removeDemo() {
@@ -40,7 +41,6 @@ export async function loadDemo() {
     RC('iCloud', 2.99, 'subscriptions', 17, { sub: 'Software & apps', method: 'Apple / Google Pay' }),
     RC('TradingView', 179, 'subscriptions', 14, { sub: 'Software & apps', method: 'Credit card', freq: 'yearly' }),
     RC('Car insurance', 210, 'transport', 20, { sub: 'Car insurance', method: 'Bank transfer', freq: 'quarterly' }),
-    RC('Salary', 3400, 'salary', 25, { type: 'income', method: 'Bank transfer' }),
   ];
   const txns = [];
   const T = (date, type, amount, category, note, extra = {}) => txns.push({ id: id(), demo: true, date, type, amount: r2(amount), currency: 'EUR', category, note, ...extra });
@@ -70,18 +70,30 @@ export async function loadDemo() {
     if (R() < 0.025) T(k, 'expense', between(15, 40), 'personal', 'Haircut', { sub: 'Haircut & beauty', method: 'Cash' });
     if (R() < 0.02) T(k, 'expense', between(20, 80), 'gifts', 'Gift', { sub: 'Gifts', method: pick(METH) });
   }
-  // one trip, a side gig and a couple of trading withdrawals
+  // one trip and a few one-offs
   const mk = n => monthKey(new Date(now.getFullYear(), now.getMonth() - n, 1));
   T(`${mk(3)}-08`, 'expense', 240, 'travel', 'Flights to Lisbon', { merchant: 'Ryanair', sub: 'Flights', method: 'Credit card', tags: ['holiday'] });
   T(`${mk(3)}-10`, 'expense', 380, 'travel', 'Apartment, 4 nights', { merchant: 'Airbnb', sub: 'Accommodation', method: 'Credit card', tags: ['holiday'] });
   T(`${mk(3)}-12`, 'expense', 165, 'travel', 'Food & tours', { sub: 'Activities & food', method: 'Cash', tags: ['holiday'] });
-  T(`${mk(4)}-18`, 'income', 650, 'side', 'Website for a friend', { method: 'Bank transfer' });
-  T(`${mk(2)}-28`, 'income', 1200, 'trading-income', 'Withdrawal from trading account', { method: 'Bank transfer' });
-  T(`${mk(1)}-09`, 'income', 14.2, 'investment-income', 'Savings interest', { method: 'Bank transfer' });
   T(`${mk(2)}-15`, 'expense', 120, 'education', 'Online course', { sub: 'Courses', method: 'Credit card' });
   T(`${mk(1)}-22`, 'expense', 60, 'fees', 'Parking fine', { sub: 'Fines', method: 'Debit card' });
+  // ---------------- journal: seven weeks of check-ins ----------------
+  // low-mood / stressed days come with a little extra impulse spending, so Insights has a pattern to show
+  const MIND = ['Busy week, but on top of it.', 'Markets were choppy — stayed out mostly.', 'Slept badly, felt foggy all day.', 'Good talk with an old friend.', 'Worried about the car repair cost.', 'Productive morning, lazy afternoon.', 'Felt restless — bought stuff I didn\'t need.', 'Long walk, cleared my head.', 'Family dinner, nice evening.', 'Too much screen time today.'];
+  const HAB = ['Exercise', 'Outside / walk', 'Read', 'No alcohol', 'Screen off before bed'];
+  const days = [];
+  const clamp = x => Math.max(1, Math.min(5, Math.round(x)));
+  for (let i = 49; i >= 1; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), k = dayKey(d);
+    if (R() < 0.2) continue;
+    const mood = clamp(3.4 + normal() * 1.05), stress = clamp(5.6 - mood + normal() * 0.8), sleep = Math.round(Math.max(4.5, Math.min(9, 7 + normal() * 0.9 + (mood - 3) * 0.3)) * 2) / 2;
+    days.push({ id: k, demo: true, mood, stress, energy: clamp(mood + normal() * 0.7), sleep, dayRating: clamp(mood + normal() * 0.6),
+      mind: pick(MIND), habits: Object.fromEntries(HAB.map(h => [h, R() < (mood >= 4 ? 0.7 : 0.35)])), lesson: R() < 0.25 ? pick(['Wait a day before buying anything over €50.', 'Go to bed before midnight.', 'Walk before checking the charts.', 'Fewer coffees after 2pm.']) : '' });
+    if (stress >= 4 || mood <= 2) { const [m, sub] = pick(SHOP); T(k, 'expense', between(35, 140), 'shopping', sub, { merchant: m, sub, method: 'Credit card', kind: 'want', note: 'Impulse buy' }); }
+  }
   await store.putMany('recurring', bills);
   await store.putMany('txns', txns);
+  await store.putMany('days', days.filter(x => !store.get('days', x.id)));
   if (!(store.getSettings().budgets?.total) && !Object.keys(store.getSettings().budgets?.byCat || {}).length) {
     await store.saveSettings({ budgets: { total: 2300, byCat: { groceries: 350, dining: 250, transport: 200, shopping: 150, fun: 100, subscriptions: 60 } }, demoBudgets: true });
   }
@@ -90,7 +102,7 @@ export async function loadDemo() {
   const A = (name, kind, category, extra = {}) => ({ id: id(), demo: true, name, kind, category, ...extra });
   const nw = {
     checking: A('Checking', 'asset', 'cash', { currency: 'EUR', institution: 'Revolut', custody: 'bank', purpose: 'Spending' }),
-    hysa: A('High-yield savings', 'asset', 'savings', { currency: 'EUR', institution: 'Trade Republic', custody: 'bank', purpose: 'Emergency fund', apy: 3.75 }),
+    hysa: A('High-yield savings', 'asset', 'savings', { currency: 'EUR', institution: 'Trade Republic', custody: 'bank', purpose: 'Emergency fund', apy: 2.75, apyHistory: [{ from: '0000-01-01', apy: 3.75 }, { from: dayKey(new Date(now.getFullYear(), now.getMonth() - 4, 1)), apy: 2.75 }] }),
     mmf: A('Money-market fund', 'asset', 'savings', { currency: 'USD', institution: 'IBKR', custody: 'broker', purpose: 'Short-term goals', apy: 4.6, liquid: true }),
     etf: A('ETF portfolio', 'asset', 'brokerage', { currency: 'USD', institution: 'IBKR', custody: 'broker', purpose: 'Long-term investing' }),
     pension: A('Pension fund', 'asset', 'retirement', { currency: 'EUR', institution: 'Pension', custody: 'broker', purpose: 'Retirement' }),
@@ -117,9 +129,8 @@ export async function loadDemo() {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const mk = monthKey(d);
     const mkt = 0.007 + normal() * 0.035;
-    const income = Math.round(5600 + normal() * 200 + (d.getMonth() === 11 ? 5000 : 0) + (i < 12 ? 400 : 0));
-    const expenses = Math.round(3300 + normal() * 380 + (d.getMonth() === 7 ? 1800 : 0));
-    const saved = income - expenses;
+    // what was added from trading profits and left over after spending (varies a lot month to month)
+    const saved = Math.round(Math.max(-1500, 1900 + normal() * 1600 + (d.getMonth() === 11 ? 4000 : 0)));
     if (i < M) {
       v.etf = v.etf * (1 + mkt) + saved * 0.4;
       v.pension = v.pension * (1 + mkt * 0.8) + 350;
@@ -143,11 +154,21 @@ export async function loadDemo() {
     snaps.push({ id: id(), demo: true, date: dayKey(d), balances });
   }
   await store.putMany('nwAccounts', Object.values(nw));
-  // subscriptions & bills come out of the everyday account, salary goes into it
-  await store.putMany('recurring', bills.map(b => ({ ...b, accountId: b.category === 'subscriptions' && b.method === 'Credit card' ? nw.cc.id : nw.checking.id })));
+  // subscriptions & bills come out of the everyday account (or the credit card), and update its balance
+  await store.putMany('recurring', bills.map(b => ({ ...b, accountId: b.category === 'subscriptions' && b.method === 'Credit card' ? nw.cc.id : nw.checking.id, deduct: false })));
   await store.putMany('txns', txns.filter(t => t.recurringId).map(t => ({ ...t, accountId: store.get('recurring', t.recurringId)?.accountId || '' })));
   await store.putMany('nwSnapshots', snaps.filter(s => !store.all('nwSnapshots').some(x => x.date === s.date)));
-  // a sample target allocation (never touches your own plan answers); removed with the demo
+  // planned and done moves between accounts
+  const plus = n => dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + n));
+  const MV = (fromId, toId, amount, currency, date, note, extra = {}) => ({ id: id(), demo: true, fromId, toId, amount, currency, date, note, status: 'planned', ...extra });
+  await store.putMany('nwMoves', [
+    MV(nw.bybit.id, nw.hysa.id, 1500, 'USDT', plus(4), 'Take profits off the exchange', { toAmount: null }),
+    MV(nw.checking.id, nw.cc.id, 600, 'EUR', plus(9), 'Pay off the card (21% APR)'),
+    MV(nw.cexAcc.id, nw.cold.id, 1000, 'USD', plus(20), 'Move USDC to self-custody'),
+    MV(nw.trading.id, nw.mmf.id, 2000, 'USD', dayKey(new Date(now.getFullYear(), now.getMonth() - 1, 3)), 'Quarterly profit cash-out', { status: 'done', doneAt: dayKey(new Date(now.getFullYear(), now.getMonth() - 1, 3)) }),
+  ]);
+  // a sample target allocation (never touches your own targets); removed with the demo
   const pl = store.getSettings().plan;
-  if (!Object.keys(pl.targetAllocation || {}).length) await store.saveSettings({ plan: { targetAllocation: { cash: 3, savings: 10, brokerage: 25, trading: 12, retirement: 10, crypto: 10, realestate: 28, vehicle: 2 } }, demoTargets: true });
+  const simple = store.getSettings().mode !== 'pro';
+  if (!Object.keys(pl.targetAllocation || {}).length) await store.saveSettings({ plan: { targetAllocation: simple ? { cash: 3, savings: 12, trading: 15, investments: 40, assets: 30 } : { cash: 3, savings: 10, brokerage: 25, trading: 12, retirement: 10, crypto: 10, realestate: 28, vehicle: 2 } }, demoTargets: true });
 }

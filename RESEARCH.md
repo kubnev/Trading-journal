@@ -1,5 +1,24 @@
 # Research notes & design decisions
 
+## v1.3 — tracking money without a salary
+
+The owner is a trader: income is irregular (profits are cashed out a few times a year), so income-based measures — savings rate, 50/30/20 "saved", FI number from income − spending — say little or mislead. v1.3 drops income, savings rate and FI planning entirely and builds on **balance snapshots**. Later sections of this file describe the earlier design; the parts about income, savings rate and FI no longer apply.
+
+**Snapshots instead of cash flow.** Net-worth trackers that don't sync banks (spreadsheet trackers, Monarch/Origin-style manual accounts) rely on periodic balance updates; monthly is the common rhythm, and the change between snapshots *is* the result — no need to split it into "saved" vs "market". The app shows change per update, 12-month change and cash runway (cash & savings ÷ usual monthly spending).
+
+**Allocation & rebalancing.** Allocation is shown by type, custody and purpose. Target allocation uses the **5/25 threshold rule** (Larry Swedroe; widely used by Bogleheads-style investors): rebalance an asset class when it drifts more than 5 percentage points from target, or more than 25% of its target weight, whichever is smaller. Out-of-band types are listed on the Moves page with the amount to add or take out.
+
+**Interest follow-up.** Banks typically quote APY, compound daily and credit monthly. The app grows each yield account at its APY daily from the last recorded balance — (1 + APY)^(days/365) — so the curve matches the bank's between updates. "Earned since last update" and "this year" are estimates from that curve; each manual balance update (which includes the interest actually paid) restarts it. APY changes are kept with a start date so past periods use the old rate. Idle cash (cash/savings with no APY) and debt APR costs are shown alongside; paying a debt whose APR beats the blended savings APY is flagged as a guaranteed return.
+
+**Moves.** A planned transfer between two of your own accounts is not spending. Marking it done writes both new balances into today's snapshot (converted between currencies, or the amount you say arrived), and can be undone. Each move shows its interest effect: amount × (APY of destination − APY of source), or the APR of a debt it pays down.
+
+**Linking spending to balances (optional).** An expense can be taken off the account it was paid from; the change goes into today's snapshot, is reversed on edit/delete, and is overridden by the next manual balance update — so manual updates stay the source of truth.
+
+**Journal.** The emotional journal returned (no trading fields). Insights compares everyday spending (bills excluded) on good vs low mood, calm vs stressed and rested vs tired days, as a reflection prompt rather than a statistical claim.
+
+Sources: Monarch — net worth tracking (monarch.com/features/tracking); Origin (useorigin.com); Young and the Invested — net worth tracking cadence (youngandtheinvested.com); NerdWallet — compound interest; Marcus — savings calculator (daily compounding, monthly crediting); The Finance Buff — 5% rebalancing band; Monevator — threshold rebalancing; Equicurious — rebalancing bands.
+
+
 ## Part 0 — Expense tracking (v1.0, finance-only app)
 
 The app was split in v1.0: the trading journal and daily journal moved to the archive branch, and the app became a finance tracker (spending + net worth). Research summary for the spending side:

@@ -5,7 +5,7 @@ import * as store from '../store.js';
 import { html, raw, modal, toast, download, readFileText, today } from '../ui.js';
 import { CURRENCIES, displayCcy } from '../fx.js';
 import { parseCSV, parseDate, numv, guess, toCSV } from '../csv.js';
-import { expenseCats, incomeCats, catById } from './categories.js';
+import { expenseCats, catById } from './categories.js';
 
 const FIELDS = [
   ['date', 'Date', true, ['date', 'transaction date', 'booking date', 'value date', 'posted', 'completed date', 'started date', 'datum']],
@@ -19,10 +19,10 @@ const FIELDS = [
 ];
 
 export function exportTxnsCSV() {
-  const rows = [...store.all('txns')].sort((a, b) => a.date.localeCompare(b.date));
-  const head = ['date', 'type', 'amount', 'currency', 'category', 'subcategory', 'note', 'merchant', 'payment_method', 'need_or_want', 'tags', 'excluded', 'recurring'];
-  const body = rows.map(t => [t.date, t.type || 'expense', t.amount, t.currency || displayCcy(), catById(t.category).name, t.sub || '', t.note || '', t.merchant || '', t.method || '', t.kind || '', (t.tags || []).join(';'), t.exclude ? 'yes' : '', t.recurringId ? 'yes' : '']);
-  download(`transactions-${today()}.csv`, toCSV([head, ...body]), 'text/csv');
+  const rows = store.all('txns').filter(t => t.type !== 'income').sort((a, b) => a.date.localeCompare(b.date));
+  const head = ['date', 'amount', 'currency', 'category', 'subcategory', 'note', 'merchant', 'payment_method', 'paid_from_account', 'taken_off_balance', 'need_or_want', 'tags', 'excluded', 'recurring'];
+  const body = rows.map(t => [t.date, t.amount, t.currency || displayCcy(), catById(t.category).name, t.sub || '', t.note || '', t.merchant || '', t.method || '', store.get('nwAccounts', t.accountId)?.name || '', t.deducted ? 'yes' : '', t.kind || '', (t.tags || []).join(';'), t.exclude ? 'yes' : '', t.recurringId ? 'yes' : '']);
+  download(`expenses-${today()}.csv`, toCSV([head, ...body]), 'text/csv');
 }
 
 export async function importTxnsDialog() {
@@ -34,9 +34,9 @@ export async function importTxnsDialog() {
   const opt = (i, sel) => html`<option value="${i}" ${sel ? raw('selected') : ''}>${i < 0 ? '— not in file —' : headers[i]}</option>`;
   const res = await modal({
     title: `Import ${data.length} rows from ${file.name}`, wide: true,
-    body: String(html`<p class="small muted">Map the columns from your bank's export. You need a date and either one amount column or separate money-out / money-in columns.</p>
+    body: String(html`<p class="small muted">Map the columns from your bank's export. You need a date and either one amount column or separate money-out / money-in columns. Only money going out is imported as expenses — money coming in is skipped.</p>
       <form id="mf" class="form-grid">${FIELDS.map(([k, l, req, al]) => { const g = guess(headers, al); return html`<label class="field">${l}${req ? ' *' : ''}<select name="${k}">${[-1, ...headers.map((_, i) => i)].map(i => opt(i, i === g))}</select></label>`; })}
-        <label class="field">Amount sign<select name="_sign"><option value="bank">Negative = expense, positive = income (most banks)</option><option value="spend">All amounts are expenses</option><option value="inverse">Positive = expense, negative = income</option></select></label>
+        <label class="field">Amount sign<select name="_sign"><option value="bank">Negative = money out (most banks)</option><option value="spend">All amounts are expenses</option><option value="inverse">Positive = money out</option></select></label>
         <label class="field">Date format<select name="_datefmt"><option value="auto">Auto-detect</option><option value="dmy">DD/MM/YYYY</option><option value="mdy">MM/DD/YYYY</option></select></label>
         <label class="field">Currency (if not in file)<select name="_ccy">${CURRENCIES.map(c => html`<option ${c === displayCcy() ? raw('selected') : ''}>${c}</option>`)}</select></label>
         <label class="field">Unknown categories go to<select name="_cat">${expenseCats().map(c => html`<option value="${c.id}" ${c.id === 'other' ? raw('selected') : ''}>${c.emoji} ${c.name}</option>`)}</select></label>
@@ -52,12 +52,12 @@ export async function importTxnsDialog() {
   if (!res || typeof res !== 'object') return false;
 
   const col = (r, k) => (res[k] === '-1' ? '' : (r[+res[k]] ?? '').trim());
-  const byName = new Map([...expenseCats(), ...incomeCats()].map(c => [c.name.toLowerCase(), c.id]));
+  const byName = new Map(expenseCats().map(c => [c.name.toLowerCase(), c.id]));
   // learn from your own history: description/merchant → category
   const learned = new Map();
   for (const t of store.all('txns')) for (const k of [t.merchant, t.note]) if (k) learned.set(k.trim().toLowerCase(), t.category);
   const seen = new Set(store.all('txns').map(t => `${t.date}|${(+t.amount).toFixed(2)}|${(t.note || '').toLowerCase()}`));
-  const out = []; let skipped = 0, dupes = 0;
+  const out = []; let skipped = 0, dupes = 0, moneyIn = 0;
   for (const r of data) {
     const date = parseDate(col(r, 'date'), res._datefmt);
     let v = null;
@@ -65,10 +65,11 @@ export async function importTxnsDialog() {
     else { const d = numv(col(r, 'debit')), c = numv(col(r, 'credit')); v = d ? -Math.abs(d) : c ? Math.abs(c) : null; }
     if (!date || v == null || v === 0) { skipped++; continue; }
     const type = res._sign === 'spend' ? 'expense' : res._sign === 'inverse' ? (v > 0 ? 'expense' : 'income') : (v < 0 ? 'expense' : 'income');
+    if (type === 'income') { moneyIn++; continue; }
     const desc = col(r, 'desc'), catRaw = col(r, 'category').toLowerCase();
     const ccy = col(r, 'currency').toUpperCase();
     let category = byName.get(catRaw) || learned.get(desc.toLowerCase());
-    if (!category || (type === 'income') !== !!catById(category).income) category = type === 'income' ? 'other-income' : res._cat;
+    if (!category || !expenseCats().some(c => c.id === category)) category = res._cat;
     const note = col(r, 'note') || desc;
     const key = `${date}|${Math.abs(v).toFixed(2)}|${note.toLowerCase()}`;
     if (seen.has(key)) { dupes++; continue; }
@@ -76,6 +77,6 @@ export async function importTxnsDialog() {
     out.push({ type, date, amount: Math.abs(v), currency: CURRENCIES.includes(ccy) ? ccy : res._ccy, category, note: note.slice(0, 120), merchant: desc.slice(0, 60), imported: file.name.slice(0, 60) });
   }
   if (out.length) await store.putMany('txns', out);
-  toast(`Imported ${out.length} transaction${out.length === 1 ? '' : 's'}${dupes ? ` · ${dupes} already there` : ''}${skipped ? ` · ${skipped} rows without a date or amount skipped` : ''}`, out.length ? 'info' : 'error');
+  toast(`Imported ${out.length} expense${out.length === 1 ? '' : 's'}${moneyIn ? ` · ${moneyIn} money-in rows skipped` : ''}${dupes ? ` · ${dupes} already there` : ''}${skipped ? ` · ${skipped} rows without a date or amount skipped` : ''}`, out.length ? 'info' : 'error');
   return out.length > 0;
 }

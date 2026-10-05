@@ -1,8 +1,8 @@
 // One-time conversion of data from the old "trading journal + net worth" version.
 //  • Net-worth accounts that mirrored a trading account become normal accounts: their current
 //    value (starting balance + deposits/withdrawals + closed-trade P&L) is recorded for today.
-//  • Monthly cash-flow totals become two transactions per month (income + spending) so the
-//    savings rate, emergency fund and FI planning keep their history.
+//  • Monthly cash-flow totals become one spending transaction per month, so your usual
+//    monthly spending keeps its history.
 // Old trades / journal entries are left untouched in the browser database (not shown, not deleted).
 import * as store from './store.js';
 import { today } from './ui.js';
@@ -54,7 +54,6 @@ export async function migrateLegacy(src = null) {
     const tx = [];
     for (const m of months) {
       const base = { date: `${m.id}-01`, currency: m.currency, imported: 'cashflow', note: m.note || '' };
-      if (+m.income) tx.push({ ...base, type: 'income', amount: +m.income, category: 'other-income', note: base.note || 'Monthly income (from the old Cash flow page)' });
       if (+m.expenses) tx.push({ ...base, type: 'expense', amount: +m.expenses, category: 'other', note: base.note || 'Monthly spending total (from the old Cash flow page)' });
     }
     if (tx.length) await store.putMany('txns', tx);

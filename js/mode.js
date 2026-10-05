@@ -8,7 +8,7 @@ const SIMPLE = {
   lead: 'Quick, plain-language input.',
   points: [
     'Accounts are one of six types: Cash, Savings, Trading capital, Investments, Assets, Debt',
-    'Expenses: amount, category, date and a short note — a few seconds each',
+    'Expenses: amount, category, date, a short note — and optionally the account it came from',
     'Subscriptions & bills: name, amount, charge day, account',
     'Everything else (liquidity, custody, purpose…) is worked out for you',
   ],
@@ -18,9 +18,9 @@ const PRO = {
   lead: 'Detailed input for deeper analysis.',
   points: [
     '11 asset and 8 debt categories (retirement, real estate, vehicles, mortgage…)',
-    'Set custody, purpose, liquidity and FI status per account',
-    'Expenses: subcategory, merchant, payment method, account, tags, need/want, repeats',
-    'Category subcategories and end dates / payment details on bills',
+    'Set institution, custody, purpose and liquidity per account',
+    'Expenses: subcategory, merchant, payment method, tags, need/want, repeats',
+    'Journal: what went well / was hard, and tags',
   ],
 };
 const card = (m, id, current) => html`<button type="button" class="mode-card ${current === id ? 'on' : ''}" data-pick="${id}">

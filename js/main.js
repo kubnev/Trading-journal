@@ -10,6 +10,8 @@ import { txnModal } from './spend/txn.js';
 import { postDueRecurring } from './spend/calc.js';
 import { migrateLegacy } from './migrate.js';
 import * as N from './networth/views.js';
+import * as MV from './networth/moves.js';
+import * as J from './journal/views.js';
 import { openHelp } from './help.js';
 import { maybeStartTour, cleanupTourDemo, startTour } from './tour.js';
 import { estimatesView } from './onboarding.js';
@@ -35,6 +37,7 @@ const I = {
   chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   book: 'M4 4h7v16H4zM13 4h7v16h-7z',
   bank: 'M3 10h18L12 4zM5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18',
+  swap: 'M4 8h14l-4-4M20 16H6l4 4',
 };
 const NAV = [
   { group: null, items: [{ path: '/', label: 'Overview', icon: I.home }] },
@@ -42,8 +45,9 @@ const NAV = [
     { path: '/networth', label: 'Net worth', icon: I.grid },
     { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
     { path: '/networth/update', label: 'Update balances', icon: I.flow },
+    { path: '/networth/moves', label: 'Moves', icon: I.swap },
+    { path: '/networth/interest', label: 'Interest', icon: I.bank },
     { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
-    { path: '/networth/plan', label: 'FI planning', icon: I.star },
   ] },
   { group: 'Spending', items: [
     { path: '/spending', label: 'Spending', icon: I.chart },
@@ -53,8 +57,13 @@ const NAV = [
     { path: '/spending/recurring', label: 'Subscriptions & bills', icon: I.refresh },
     { path: '/spending/categories', label: 'Categories', icon: I.book },
   ] },
+  { group: 'Journal', items: [
+    { path: '/journal', label: 'Today', icon: I.pen },
+    { path: '/journal/history', label: 'History', icon: I.cal },
+    { path: '/journal/insights', label: 'Insights', icon: I.bulb },
+  ] },
 ];
-const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots'].some(c => store.all(c).some(x => !x.demo));
+const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots', 'nwMoves', 'days'].some(c => store.all(c).some(x => !x.demo));
 const ALL_ITEMS = NAV.flatMap(g => g.items);
 
 const ROUTES = [
@@ -70,10 +79,14 @@ const ROUTES = [
   [/^\/networth\/update$/, N.update],
   [/^\/networth\/accounts$/, N.accounts],
   [/^\/networth\/analytics$/, N.analytics],
-  [/^\/networth\/plan$/, N.plan],
-]
+  [/^\/networth\/moves$/, MV.moves],
+  [/^\/networth\/interest$/, MV.interest],
+  [/^\/journal$/, J.journalDay],
+  [/^\/journal\/history$/, J.history],
+  [/^\/journal\/insights$/, J.insights],
+];
 // old links keep working
-const REDIRECTS = { '/networth/cashflow': '/spending', '/trading': '/', '/journal': '/' };
+const REDIRECTS = { '/networth/cashflow': '/spending', '/networth/plan': '/networth/analytics', '/trading': '/' };
 
 const icon = d => raw(`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`);
 
@@ -101,7 +114,7 @@ function renderShell(path) {
   const match = ALL_ITEMS.filter(i => i.path === path || (i.path !== '/' && path.startsWith(i.path + '/'))).sort((a, b) => b.path.length - a.path.length)[0];
   $('#sidebar').innerHTML = String(html`
     <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Ledgerline</span><span class="beta">beta</span></a>
-    <div class="side-actions"><a class="btn primary" href="#/networth/update" data-tour="update">Update balances</a><button class="btn" data-quick-add data-tour="add" title="Add an expense or income (shortcut: N)">+ Expense</button></div>
+    <div class="side-actions"><a class="btn primary" href="#/networth/update" data-tour="update">Update balances</a><button class="btn" data-quick-add data-tour="add" title="Add an expense (shortcut: N)">+ Expense</button></div>
     <nav class="nav" data-tour="nav">${NAV.map(g => html`${g.group ? html`<div class="nav-group">${g.group}</div>` : ''}${g.items.map(i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`)}`)}</nav>
     <div class="sidebar-foot">
       <a href="#/settings" data-tour="settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
@@ -119,7 +132,7 @@ export async function route() {
   routing = true; again = false; dirty = false;
   try {
     const path = currentPath();
-    if (!REDIRECTS[path] && /^\/(trading|journal)(\/|$)/.test(path)) { routing = false; location.replace('#/'); return; }   // pages from the old version
+    if (!REDIRECTS[path] && /^\/trading(\/|$)/.test(path)) { routing = false; location.replace('#/'); return; }   // pages from the old version
     if (REDIRECTS[path]) { routing = false; location.replace('#' + REDIRECTS[path] + (location.hash.includes('?') ? '?' + location.hash.split('?')[1] : '')); return; }
     applyTheme();
     renderShell(path);

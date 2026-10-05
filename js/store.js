@@ -2,17 +2,19 @@
 // Collections are loaded into memory at startup; writes go through to IDB.
 
 const DB_NAME = 'ledgerline';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const COLLECTIONS = [
   'nwAccounts',    // net worth: assets & liabilities
   'nwSnapshots',   // net worth: dated balance snapshots
-  'txns',          // spending: expenses & income, one record per transaction
+  'nwMoves',       // net worth: planned / done transfers between your own accounts
+  'txns',          // spending: expenses, one record per transaction
   'recurring',     // spending: bills & subscriptions that repeat
+  'days',          // journal: one entry per day (id = YYYY-MM-DD)
   'nwCashflow',    // legacy monthly totals — converted to transactions on load, kept so old backups import
 ];
 // Stores from the old trading-journal version. Never deleted (your data stays in the browser), just not used.
-export const LEGACY_STORES = ['trades', 'tAccounts', 'tTransfers', 'setups', 'days'];
+export const LEGACY_STORES = ['trades', 'tAccounts', 'tTransfers', 'setups'];
 const BLOB_STORE = 'images';
 const META_STORE = 'meta';
 
@@ -29,16 +31,11 @@ export const DEFAULT_SETTINGS = {
   payMethods: ['Debit card', 'Credit card', 'Cash', 'Bank transfer', 'Apple / Google Pay', 'Revolut', 'PayPal'],
   tour: { done: false },
   plan: {
-    annualExpenses: 0,            // 0 → derived from your spending history
-    withdrawalRate: 4,
-    expectedReturn: 6,            // nominal % / yr
-    inflation: 2.5,
-    currentAge: 30,
-    retirementAge: 60,
-    monthlyContribution: 0,       // 0 → average monthly income − spending
     targetAllocation: {},         // category → %
     emergencyMonths: 6,
   },
+  habits: ['Exercise', 'Outside / walk', 'Read', 'No alcohol', 'Screen off before bed'],
+  dayTags: ['Stressed', 'Calm', 'Social', 'Productive', 'Tired', 'Sick'],
 };
 
 let db = null;
@@ -82,7 +79,8 @@ export async function init() {
   // migrate the old per-section switches to the single global one
   if (!saved.mode && (saved.tradingMode || saved.networthMode)) saved.mode = saved.tradingMode === 'pro' || saved.networthMode === 'pro' ? 'pro' : 'simple';
   delete saved.tradingMode; delete saved.networthMode;
-  for (const k of ['tagLists', 'habits', 'dayTags']) delete saved[k];   // trading/journal settings from older versions
+  delete saved.tagLists;   // trading setting from older versions
+  if (saved.plan) for (const k of ['annualExpenses', 'withdrawalRate', 'expectedReturn', 'inflation', 'currentAge', 'retirementAge', 'monthlyContribution']) delete saved.plan[k];
   settings = merge(structuredClone(DEFAULT_SETTINGS), saved);
   // Ask the browser not to evict our data under storage pressure.
   try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
@@ -232,7 +230,7 @@ export function validateBackup(obj) {
 // Only known settings, with values the app can actually use (a bad locale or currency would break formatting)
 function cleanSettings(s) {
   const out = {};
-  for (const k of Object.keys(DEFAULT_SETTINGS).concat(['fx', 'plan', 'tour'])) if (k in s) out[k] = s[k];
+  for (const k of Object.keys(DEFAULT_SETTINGS).concat(['fx', 'plan', 'tour', 'estimates'])) if (k in s) out[k] = s[k];
   const okIntl = (fn) => { try { fn(); return true; } catch { return false; } };
   if (out.currency != null && !(out.currency === 'USDT' || (typeof out.currency === 'string' && okIntl(() => new Intl.NumberFormat('en', { style: 'currency', currency: out.currency }))))) delete out.currency;
   if (out.locale != null && !(typeof out.locale === 'string' && okIntl(() => new Intl.NumberFormat(out.locale)))) out.locale = undefined;
@@ -240,9 +238,9 @@ function cleanSettings(s) {
   if (!['greenred', 'blueorange'].includes(out.pnlColors)) delete out.pnlColors;
   if (!['simple', 'pro'].includes(out.mode)) delete out.mode;
   const strList = v => Array.isArray(v) && v.every(x => typeof x === 'string');
-  if ('payMethods' in out && !strList(out.payMethods)) delete out.payMethods;
+  for (const k of ['payMethods', 'habits', 'dayTags']) if (k in out && !strList(out[k])) delete out[k];
   if ('categories' in out && out.categories !== null && !(Array.isArray(out.categories) && out.categories.every(c => isObj(c) && typeof c.id === 'string' && typeof c.name === 'string' && (c.subs == null || strList(c.subs))))) delete out.categories;
-  for (const k of ['fx', 'plan', 'tour', 'priceApi', 'budgets']) if (k in out && !isObj(out[k])) delete out[k];
+  for (const k of ['fx', 'plan', 'tour', 'priceApi', 'budgets', 'estimates']) if (k in out && !isObj(out[k])) delete out[k];
   return out;
 }
 

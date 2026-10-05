@@ -161,10 +161,11 @@ kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 10px; }
 .stats.big { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; min-width: 0; box-shadow: var(--shadow); }
-.stat-label { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-label { font-size: 12px; color: var(--text-3); display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; line-height: 1.35; min-width: 0; }
+.stat-label .tag { margin: 0; }
 .stat-value { font-family: var(--font-serif); font-size: 22px; font-weight: 550; font-variant-numeric: lining-nums; margin-top: 4px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stats.big .stat-value { font-size: 27px; }
-.stat-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; line-height: 1.35; overflow-wrap: anywhere; }
 .tip { display: inline-grid; place-items: center; width: 15px; height: 15px; margin: 0 2px 0 5px; vertical-align: 1px; border-radius: 50%; border: 1px solid var(--border-strong); color: var(--text-3); font: 600 10px/1 inherit; font-family: inherit; text-transform: none; letter-spacing: 0; cursor: help; user-select: none; flex: none; }
 .tip:hover, .tip:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
 .tip-bubble { position: fixed; z-index: 1000; max-width: min(300px, calc(100vw - 16px)); padding: 8px 11px; border-radius: 8px; background: var(--text-1); color: var(--bg); font-size: 12.5px; line-height: 1.45; font-weight: 450; text-transform: none; letter-spacing: 0; box-shadow: 0 4px 16px rgba(0, 0, 0, .18); pointer-events: none; }
@@ -519,3 +520,15 @@ details.fold > summary { cursor: pointer; font-family: var(--font-serif); font-w
 .onboard { max-width: 760px; margin: 4vh auto 0; }
 .onboard > p { max-width: 680px; }
 .est-form .form-sep { border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* accounts grouped by type */
+.type-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.type-chip { display: inline-flex; gap: 8px; align-items: baseline; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 13px; text-decoration: none; }
+.type-chip:hover { border-color: var(--accent); color: var(--text); }
+.type-chip b { color: var(--text); font-variant-numeric: tabular-nums; }
+.type-chip b.neg { color: var(--neg-text); }
+[id^="grp-"] { scroll-margin-top: 70px; }
+.acct-row .deductf .hint { font-weight: 400; }
+.move-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; color: var(--text); text-decoration: none; padding: 2px 0; }
+.move-row:hover .ellipsis { color: var(--accent); }
+.first-snap { display: flex; flex-direction: column; justify-content: center; min-height: 220px; gap: 6px; }
