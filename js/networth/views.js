@@ -226,6 +226,10 @@ export async function update(el) {
 // the standard buckets plus any custom ones already used on other accounts
 const purposeChoices = a => [...new Set([...PURPOSES, ...store.all('nwAccounts').map(x => (x.purpose || '').trim()).filter(Boolean), ...(a.purpose ? [a.purpose] : [])])];
 // Simple input: pick one of six types; everything else (custody, purpose, liquidity…) is automatic.
+// today's value in the account's own currency (incl. yield growth since the last update)
+const currentBalance = a => Math.round((pointAt(today()).byAcctNative[a.id] || 0) * 100) / 100;
+const balField = a => html`<label class="field bal">${a.id ? 'Balance today' : 'Current balance'}${a.id ? html` <span class="hint">change it to record today's value — earlier history is kept</span>` : ''}<input name="balance" type="number" step="any" value="${a.id && !a.archivedAt ? currentBalance(a) : ''}" placeholder="${a.kind === 'liability' ? 'amount owed' : ''}" ${a.archivedAt ? raw('disabled') : ''}></label>`;
+
 async function editAccountSimple(a) {
   const tAccts = store.all('tAccounts');
   const g0 = a.id ? groupOf(a) : a.kind === 'liability' ? 'debt' : 'cash';
@@ -237,7 +241,7 @@ async function editAccountSimple(a) {
         <div class="type-pick" role="radiogroup">${types.map(t => html`<label class="type-opt"><input type="radio" name="group" value="${t.id}" ${t.id === g0 ? raw('checked') : ''}><span><b>${t.label}</b><small>${t.hint}</small></span></label>`)}</div></div>
       <label class="field span2">Name<input name="name" required value="${a.name || ''}" placeholder="e.g. Revolut, Savings account, Binance, Car"></label>
       <label class="field">Currency${raw(ccySelect('currency', a.currency || displayCcy()))}</label>
-      ${!a.id ? html`<label class="field bal">Current balance<input name="balance" type="number" step="any"></label>` : ''}
+      ${balField(a)}
       <label class="field yld">Interest / yield (APY %) <span class="hint">optional</span><input name="apy" type="number" step="any" min="0" max="100" value="${a.apy ?? ''}" placeholder="e.g. 3.5"></label>
       <label class="field lia">Interest rate (APR %) <span class="hint">optional</span><input name="rate" type="number" step="any" min="0" value="${a.rate ?? ''}"></label>
       ${tAccts.length ? html`<label class="field span2 lnk">Link to trading account <span class="hint">balance follows the journal</span><select name="linkedTradingAccountId"><option value="">— not linked —</option>${tAccts.map(t => html`<option value="${t.id}" ${a.linkedTradingAccountId === t.id ? raw('selected') : ''}>${t.name}</option>`)}</select></label>` : ''}
@@ -285,7 +289,7 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
       <label class="field span2">Name<input name="name" required value="${a.name || ''}" placeholder="e.g. Chase checking, Vanguard 401k, Home"></label>
       <label class="field">Institution<input name="institution" value="${a.institution || ''}"></label>
       <label class="field">Currency <span class="hint">the account's own currency</span>${raw(ccySelect('currency', a.currency || displayCcy()))}</label>
-      ${!a.id ? html`<label class="field bal">Current balance<input name="balance" type="number" step="any" placeholder="${a.kind === 'liability' ? 'amount owed' : ''}"></label>` : ''}
+      ${balField(a)}
       <div class="lia full form-grid" style="padding:0">
         <label class="field">Interest rate (APR %)<input name="rate" type="number" step="any" min="0" value="${a.rate ?? ''}"></label>
         <label class="field">Monthly payment<input name="payment" type="number" step="any" min="0" value="${a.payment ?? ''}"></label>
@@ -305,8 +309,8 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
       const f = w.querySelector('#nf');
       const purp = () => { f.purposeOther.hidden = f.purpose.value !== '__custom'; if (!f.purposeOther.hidden) f.purposeOther.focus(); f.purpose.options[0].textContent = `Auto (${purposeOf({ category: f.category.value })})`; };
       f.purpose.onchange = purp; f.category.addEventListener('change', purp);
-      const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; const bal = w.querySelector('.bal'); if (bal) bal.hidden = !li && f.tracksHoldings.checked; };
-      f.tracksHoldings.onchange = sync;
+      const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; const bal = w.querySelector('.bal'); if (bal) bal.hidden = !li && (f.tracksHoldings.checked || !!f.linkedTradingAccountId?.value); };
+      f.tracksHoldings.onchange = sync; if (f.linkedTradingAccountId) f.linkedTradingAccountId.onchange = sync;
       f.kind.onchange = () => { f.category.innerHTML = String(html`${(f.kind.value === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}">${c.label}</option>`)}`); sync(); purp(); };
       sync();
     },
@@ -325,9 +329,12 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
 }
 
 async function finishAccountSave(a, obj, res) {
+  const before = a.id ? currentBalance(a) : null;
   const saved = await store.put('nwAccounts', obj);
   if (saved.tracksHoldings && !a.tracksHoldings) { await editHoldings(saved); return saved; }
-  if (!a.id && !saved.tracksHoldings && !saved.linkedTradingAccountId && res.balance !== '' && res.balance != null) {
+  // a changed balance is recorded for today (earlier snapshots keep the history)
+  const changed = res.balance !== '' && res.balance != null && (before == null || Math.abs(Math.abs(+res.balance) - before) >= 0.005);
+  if (!saved.tracksHoldings && !saved.linkedTradingAccountId && !saved.archivedAt && changed) {
     const d = today();
     const snap = store.all('nwSnapshots').find(s => s.date === d);
     await store.put('nwSnapshots', { ...(snap || { date: d }), balances: { ...(snap?.balances || {}), [saved.id]: Math.abs(+res.balance) } });

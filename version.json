@@ -1,6 +1,6 @@
 {
-  "version": "0.7.0",
-  "notes": "Simple/Pro is now an input mode; all views available in both.",
+  "version": "0.7.1",
+  "notes": "Edit account balance from the edit dialog.",
   "files": [
     "css/app.css",
     "js/backup.js",
