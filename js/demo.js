@@ -142,6 +142,9 @@ export async function loadDemo() {
     snaps.push({ id: id(), demo: true, date: dayKey(d), balances });
   }
   await store.putMany('nwAccounts', Object.values(nw));
+  // subscriptions & bills come out of the everyday account, salary goes into it
+  await store.putMany('recurring', bills.map(b => ({ ...b, accountId: b.category === 'subscriptions' && b.method === 'Credit card' ? nw.cc.id : nw.checking.id })));
+  await store.putMany('txns', txns.filter(t => t.recurringId).map(t => ({ ...t, accountId: store.get('recurring', t.recurringId)?.accountId || '' })));
   await store.putMany('nwSnapshots', snaps.filter(s => !store.all('nwSnapshots').some(x => x.date === s.date)));
   const pl = store.getSettings().plan;
   if (!Object.keys(pl.targetAllocation || {}).length) {

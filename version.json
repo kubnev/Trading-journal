@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "notes": "Ledgerline 1.0 — spending & net worth (trading journal archived).",
+  "version": "1.1.0",
+  "notes": "Subscriptions with charge day and account; active subscriptions on the Spending page.",
   "files": [
     "css/app.css",
     "js/backup.js",

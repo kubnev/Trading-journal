@@ -49,12 +49,13 @@ const F = {
 
   // ---------- bills & subscriptions ----------
   'rf:name': 'What it is, e.g. Rent, Netflix, Salary.',
-  'rf:type': 'Expense for bills and subscriptions; income for salary or other regular money in.',
+  'rf:kind': 'Subscription = something you signed up for (Netflix, Spotify, gym, cloud storage). Bill = rent, utilities, phone, insurance. Income = salary or other regular money in.',
+  'rf:accountId': 'The account it’s charged to (or paid into). Shown on the Spending page and in “By account”. A label only — update the balance on Net worth as usual.',
   'rf:amount': 'The amount of each payment, in its currency.',
   'rf:currency': 'The currency it’s charged in.',
   'rf:category': 'Where each payment is counted. Subscriptions are totalled per year on this page.',
   freq: 'How often it repeats. Monthly and yearly payments keep the same day of the month.',
-  next: 'The date of the next payment. If it’s in the past and “add automatically” is on, the missed payments are added when you save.',
+  next: 'The next day it’s charged. It then repeats on that day — e.g. 9 October monthly = every month on the 9th. If the date is in the past and “add automatically” is on, the missed charges are added when you save.',
   auto: 'On: each payment is added to your transactions on its due date. Off: it’s only a reminder — you confirm it with “Mark paid”.',
   until: 'Optional last date, e.g. when a contract ends. Nothing is added after it.',
   'rf:merchant': 'Who you pay. Copied onto each transaction.',

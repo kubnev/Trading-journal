@@ -9,7 +9,7 @@ const SIMPLE = {
   points: [
     'Accounts are one of six types: Cash, Savings, Trading capital, Investments, Assets, Debt',
     'Expenses: amount, category, date and a short note — a few seconds each',
-    'Bills & subscriptions: name, amount, how often',
+    'Subscriptions & bills: name, amount, charge day, account',
     'Everything else (liquidity, custody, purpose…) is worked out for you',
   ],
 };

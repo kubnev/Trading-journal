@@ -92,6 +92,8 @@ export function budgetFor() {
 }
 
 // ---------- recurring bills & subscriptions ----------
+// a subscription: flagged as one, or (older entries) filed under the Subscriptions category
+export const isSubscription = r => r.type !== 'income' && (r.isSub === true || (r.isSub == null && r.category === 'subscriptions'));
 export const FREQS = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Every 3 months', yearly: 'Yearly' };
 const PER_YEAR = { weekly: 52, monthly: 12, quarterly: 4, yearly: 1 };
 export const yearlyCost = r => (+r.amount || 0) * (PER_YEAR[r.freq] || 12);
@@ -136,4 +138,4 @@ export async function postDueRecurring() {
   }
   return n;
 }
-export const txnFromRecurring = (r, date) => ({ type: r.type || 'expense', date, amount: +r.amount, currency: r.currency, category: r.category, sub: r.sub || '', note: r.name, merchant: r.merchant || '', method: r.method || '', recurringId: r.id });
+export const txnFromRecurring = (r, date) => ({ type: r.type || 'expense', date, amount: +r.amount, currency: r.currency, category: r.category, sub: r.sub || '', note: r.name, merchant: r.merchant || '', method: r.method || '', accountId: r.accountId || '', recurringId: r.id });

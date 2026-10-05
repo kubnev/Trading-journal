@@ -41,7 +41,7 @@ const NAV = [
     { path: '/spending/transactions', label: 'Transactions', icon: I.list },
     { path: '/spending/calendar', label: 'Calendar', icon: I.cal },
     { path: '/spending/budgets', label: 'Budgets', icon: I.target },
-    { path: '/spending/recurring', label: 'Bills & subscriptions', icon: I.refresh },
+    { path: '/spending/recurring', label: 'Subscriptions & bills', icon: I.refresh },
     { path: '/spending/categories', label: 'Categories', icon: I.book },
   ] },
   { group: 'Net worth', items: [

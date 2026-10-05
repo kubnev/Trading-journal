@@ -75,6 +75,7 @@ export async function dashboard(el) {
       <div class="card"><div class="card-head"><h2>Spending through the month</h2><span class="hint">cumulative, vs last month${b.total ? ' and budget' : ''}</span></div><div class="chart tall"><canvas id="s-pace"></canvas></div></div>
       <div class="card"><div class="card-head"><h2>By category</h2><span class="hint">${fmtMonth(m)}</span></div>${cats.length ? html`<div class="chart tall"><canvas id="s-cat"></canvas></div>` : html`<p class="muted small">No spending this month.</p>`}</div>
     </div>
+    ${subsCard()}
     <div class="grid g2 mt">
       <div class="card" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Categories</h2><span class="hint">${avgN ? `vs your ${avgN}-month average` : 'this month'}</span></div>
         ${cats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Category</th><th class="num">Spent</th><th class="num">Avg</th><th class="num">Change</th>${b.catSum ? raw('<th style="width:110px">Budget</th>') : ''}</tr></thead><tbody>
@@ -92,9 +93,10 @@ export async function dashboard(el) {
         ${merchants.length >= 2 ? html`<dl class="kv">${merchants.map(x => html`<dt>${x.key} <span class="muted small">${x.count}×</span></dt><dd>${money(x.total)}</dd>`)}</dl>`
           : biggest.length ? html`<dl class="kv">${biggest.map(t => html`<dt>${catLabel(t.category).split(' ')[0]} ${t.note || catById(t.category).name} <span class="muted small">${fmtDate(t.date, { month: 'short', day: 'numeric' })}</span></dt><dd>${money(S.val(t))}</dd>`)}</dl>` : html`<p class="muted small">—</p>`}</div>
     </div>
-    ${up.length ? html`<div class="card mt"><div class="card-head"><h2>Coming up</h2><a class="hint" href="#/spending/recurring">Bills & subscriptions →</a></div>
+    ${up.length ? html`<div class="card mt"><div class="card-head"><h2>Coming up</h2><a class="hint" href="#/spending/recurring">Subscriptions & bills →</a></div>
       <div class="upcoming">${up.slice(0, 8).map(u => html`<div class="up-item"><span class="muted small">${fmtDate(u.date, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span>${catLabel(u.r.category).split(' ')[0]} ${u.r.name}</span><b class="${u.type === 'income' ? 'pos' : ''}">${u.type === 'income' ? '+' : ''}${money(u.value)}</b></div>`)}</div></div>` : ''}`);
   body.querySelectorAll('tr[data-href]').forEach(tr => tr.onclick = () => { location.hash = tr.dataset.href; });
+  wireSubs(body);
 
   const p = C.palette();
   const n = s.n, labels = Array.from({ length: n }, (_, i) => String(i + 1));
@@ -249,30 +251,53 @@ export async function budgets(el) {
 }
 
 // ================= bills & subscriptions =================
-async function editRecurring(r = {}) {
+// kind: 'sub' (subscription) | 'bill' | 'income'
+const recKind = r => (r.type === 'income' ? 'income' : S.isSubscription(r) ? 'sub' : 'bill');
+const KIND_LABEL = { sub: 'Subscription', bill: 'Bill', income: 'Income' };
+const ordinal = n => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+export const scheduleText = r => {
+  const d = +r.day || +(r.next || '').slice(8, 10);
+  if (r.freq === 'weekly') return `every ${parseDay(r.next).toLocaleDateString(store.getSettings().locale, { weekday: 'long' })}`;
+  if (r.freq === 'yearly') return `every year on ${fmtDate(r.next, { month: 'long', day: 'numeric' })}`;
+  if (r.freq === 'quarterly') return `every 3 months on the ${ordinal(d)}`;
+  return `every month on the ${ordinal(d)}`;
+};
+const acctName = id => store.get('nwAccounts', id)?.name || '';
+
+export async function editRecurring(r = {}) {
   const pro = !simpleMode();
-  const type = r.type || 'expense';
+  const kind0 = r.id ? recKind(r) : r.kind0 || 'sub';
+  const catFor = k => (k === 'income' ? incomeCats() : expenseCats());
+  const defCat = k => (k === 'sub' ? 'subscriptions' : k === 'income' ? 'salary' : 'bills');
+  const accts = store.all('nwAccounts').filter(a => !a.archivedAt);
   const res = await modal({
-    title: r.id ? `Edit ${r.name}` : 'Add a bill or subscription', wide: true,
+    title: r.id ? `Edit ${r.name}` : kind0 === 'sub' ? 'Add a subscription' : 'Add a bill or subscription', wide: true,
     body: String(html`<form id="rf" class="form-grid">
-      <label class="field span2">Name<input name="name" required maxlength="60" value="${r.name || ''}" placeholder="e.g. Rent, Netflix, Gym, Salary"></label>
-      <label class="field">Type<select name="type"><option value="expense">Expense</option><option value="income" ${type === 'income' ? raw('selected') : ''}>Income</option></select></label>
+      <label class="field">What is it?<select name="kind">${Object.entries(KIND_LABEL).map(([k, l]) => html`<option value="${k}" ${k === kind0 ? raw('selected') : ''}>${l}</option>`)}</select></label>
+      <label class="field span2">Name<input name="name" required maxlength="60" value="${r.name || ''}" placeholder="e.g. Netflix, Spotify, Gym, Rent, Salary"></label>
       <label class="field">Amount<input name="amount" type="number" step="any" min="0" required value="${r.amount ?? ''}"></label>
       <label class="field">Currency${raw(ccySelect('currency', r.currency || displayCcy()))}</label>
-      <label class="field">Category<select name="category">${catsFor(type).map(c => html`<option value="${c.id}" ${c.id === r.category ? raw('selected') : ''}>${c.emoji} ${c.name}</option>`)}</select></label>
       <label class="field">How often<select name="freq">${Object.entries(S.FREQS).map(([k, l]) => html`<option value="${k}" ${(r.freq || 'monthly') === k ? raw('selected') : ''}>${l}</option>`)}</select></label>
-      <label class="field">Next payment date<input name="next" type="date" required value="${r.next || today()}"></label>
-      <label class="check full"><input type="checkbox" name="auto" ${r.auto !== false ? raw('checked') : ''}> Add it to my transactions automatically on each due date</label>
+      <label class="field">Next charge date <span class="hint" id="sched"></span><input name="next" type="date" required value="${r.next || today()}"></label>
+      <label class="field">Category<select name="category">${catFor(kind0).map(c => html`<option value="${c.id}" ${c.id === (r.category || defCat(kind0)) ? raw('selected') : ''}>${c.emoji} ${c.name}</option>`)}</select></label>
+      <label class="field">${kind0 === 'income' ? 'Paid into account' : 'Charged to account'} <span class="hint">optional</span><select name="accountId"><option value="">—</option>${accts.map(a => html`<option value="${a.id}" ${a.id === r.accountId ? raw('selected') : ''}>${a.name}</option>`)}</select></label>
+      <label class="check full"><input type="checkbox" name="auto" ${r.auto !== false ? raw('checked') : ''}> Add it to my transactions automatically on each charge date</label>
       ${pro ? html`<label class="field">Ends on <span class="hint">optional</span><input name="until" type="date" value="${r.until || ''}"></label>
         <label class="field">Merchant / payee<input name="merchant" maxlength="60" value="${r.merchant || ''}"></label>
         <label class="field">Payment method<select name="method"><option value="">—</option>${(store.getSettings().payMethods || []).map(x => html`<option ${x === r.method ? raw('selected') : ''}>${x}</option>`)}</select></label>` : ''}
     </form>`),
-    onMount: w => { const f = w.querySelector('#rf'); f.type.onchange = () => { f.category.innerHTML = String(html`${catsFor(f.type.value).map(c => html`<option value="${c.id}">${c.emoji} ${c.name}</option>`)}`); }; },
+    onMount: w => {
+      const f = w.querySelector('#rf');
+      const sched = () => { w.querySelector('#sched').textContent = f.next.value ? '· ' + scheduleText({ freq: f.freq.value, next: f.next.value, day: +f.next.value.slice(8, 10) }) : ''; };
+      f.kind.onchange = () => { f.category.innerHTML = String(html`${catFor(f.kind.value).map(c => html`<option value="${c.id}" ${c.id === defCat(f.kind.value) ? raw('selected') : ''}>${c.emoji} ${c.name}</option>`)}`); };
+      f.next.addEventListener('change', sched); f.freq.addEventListener('change', sched); sched();
+      setTimeout(() => (r.id ? null : f.name.focus()));
+    },
     actions: [...(r.id ? [{ label: 'Delete', kind: 'danger ghost', value: () => 'delete' }] : []), { label: 'Cancel' }, { label: 'Save', kind: 'primary', value: w => {
       const f = w.querySelector('#rf');
       if (!f.name.value.trim()) { toast('Give it a name', 'error'); return false; }
       if (!(+f.amount.value > 0)) { toast('Enter an amount above zero', 'error'); return false; }
-      if (!f.next.value) { toast('Pick the next payment date', 'error'); return false; }
+      if (!f.next.value) { toast('Pick the next charge date', 'error'); return false; }
       return formData(f);
     } }],
   });
@@ -281,7 +306,8 @@ async function editRecurring(r = {}) {
     await store.del('recurring', r.id); toast('Deleted'); return true;
   }
   if (!res || typeof res !== 'object') return false;
-  const obj = { ...r, name: res.name.trim(), type: res.type, amount: +res.amount, currency: res.currency, category: res.category, freq: res.freq, next: res.next, day: +res.next.slice(8, 10), auto: !!res.auto,
+  const { kind0: _k, ...base } = r;
+  const obj = { ...base, name: res.name.trim(), type: res.kind === 'income' ? 'income' : 'expense', isSub: res.kind === 'sub', amount: +res.amount, currency: res.currency, category: res.category, freq: res.freq, next: res.next, day: +res.next.slice(8, 10), auto: !!res.auto, accountId: res.accountId || '',
     ...(pro ? { until: res.until || '', merchant: (res.merchant || '').trim(), method: res.method || '' } : {}) };
   await store.put('recurring', obj);
   const n = await S.postDueRecurring();
@@ -289,41 +315,49 @@ async function editRecurring(r = {}) {
   return true;
 }
 
+const TABS = [['subs', 'Active subscriptions'], ['bills', 'Bills'], ['income', 'Income'], ['paused', 'Paused'], ['all', 'All']];
+const perMonth = r => S.monthlyCost({ ...r, amount: S.val({ ...r, date: today() }) });
+
 export async function recurring(el) {
-  const items = [...store.all('recurring')].sort((a, b) => (!!a.paused - !!b.paused) || (a.next || '').localeCompare(b.next || ''));
+  const items = [...store.all('recurring')];
+  const show = TABS.some(t => t[0] === query().get('show')) ? query().get('show') : (items.some(r => !r.paused && S.isSubscription(r)) || !items.length ? 'subs' : 'all');
   const active = items.filter(r => !r.paused);
-  const ex = active.filter(r => r.type !== 'income'), inc = active.filter(r => r.type === 'income');
-  const monthly = ex.reduce((a, r) => a + S.monthlyCost({ ...r, amount: S.val({ ...r, date: today() }) }), 0);
-  const subs = ex.filter(r => r.category === 'subscriptions');
-  const subsYear = subs.reduce((a, r) => a + S.yearlyCost({ ...r, amount: S.val({ ...r, date: today() }) }), 0);
-  const incMonthly = inc.reduce((a, r) => a + S.monthlyCost({ ...r, amount: S.val({ ...r, date: today() }) }), 0);
+  const subs = active.filter(S.isSubscription), bills = active.filter(r => r.type !== 'income' && !S.isSubscription(r)), inc = active.filter(r => r.type === 'income');
+  const subsMonth = subs.reduce((a, r) => a + perMonth(r), 0), billsMonth = bills.reduce((a, r) => a + perMonth(r), 0), incMonth = inc.reduce((a, r) => a + perMonth(r), 0);
+  const list = (show === 'subs' ? subs : show === 'bills' ? bills : show === 'income' ? inc : show === 'paused' ? items.filter(r => r.paused) : items)
+    .sort((a, b) => (!!a.paused - !!b.paused) || (a.next || '').localeCompare(b.next || ''));
   const up = S.upcoming(null, 31);
   const overdue = items.filter(r => !r.paused && !r.auto && r.next && r.next < today());
-  el.innerHTML = String(html`<div class="page-head"><div><h1>Bills & subscriptions</h1><div class="sub">Everything that repeats — rent, bills, subscriptions, salary. Fixed costs are worth a yearly review.</div></div>
-    <div class="actions"><button class="btn primary" data-new>+ Add bill or subscription</button></div></div>
-    ${!items.length ? html`<div class="empty"><div class="empty-title">Nothing recurring yet</div><p>Add rent, utilities, phone, gym, streaming… The app adds each payment to your transactions on its due date, shows what's coming up, and totals what your subscriptions cost per year.</p><button class="btn primary" data-new>+ Add bill or subscription</button></div>` : html`
+  const count = { subs: subs.length, bills: bills.length, income: inc.length, paused: items.filter(r => r.paused).length, all: items.length };
+  el.innerHTML = String(html`<div class="page-head"><div><h1>Subscriptions & bills</h1><div class="sub">Everything that repeats — subscriptions, rent, bills, salary — with the day it's charged and the account it comes from.</div></div>
+    <div class="actions"><button class="btn" data-new="bill">+ Add bill</button><button class="btn primary" data-new="sub">+ Add subscription</button></div></div>
+    ${!items.length ? html`<div class="empty"><div class="empty-title">Nothing recurring yet</div><p>Add Netflix, Spotify, the gym, your phone plan, rent… Pick the day each one is charged and the account it comes from. Each charge is added to your transactions on that day, and you see what your subscriptions cost per month and per year.</p><button class="btn primary" data-new="sub">+ Add subscription</button><button class="btn" data-new="bill">+ Add bill</button></div>` : html`
     <div class="stats big">
-      ${stat('Fixed costs / month', money(monthly), { sub: `${ex.length} recurring expense${ex.length === 1 ? '' : 's'}`, help: 'All active recurring expenses converted to a monthly amount (weekly × 52 ÷ 12, yearly ÷ 12…).' })}
-      ${stat('Per year', money(monthly * 12))}
-      ${stat('Subscriptions / year', money(subsYear), { sub: `${subs.length} in the Subscriptions category`, help: 'Most people find at least one subscription they forgot about. Review these once a year.' })}
-      ${incMonthly ? stat('Share of regular income', pct(monthly / incMonthly, 0), { sub: `fixed costs vs ${money(incMonthly)} / month`, help: 'Fixed costs ÷ recurring income (e.g. salary). Under 50% leaves room for saving and wants.' }) : ''}
+      ${stat('Subscriptions', `${money(subsMonth)}`, { sub: `${subs.length} active · ${money(subsMonth * 12)} / year`, help: 'All active subscriptions converted to a monthly amount. Most people find at least one they forgot about — review them once a year.' })}
+      ${stat('Bills', money(billsMonth), { sub: `${bills.length} active · per month` })}
+      ${stat('All fixed costs', money(subsMonth + billsMonth), { sub: `${money((subsMonth + billsMonth) * 12)} / year` })}
+      ${incMonth ? stat('Share of regular income', pct((subsMonth + billsMonth) / incMonth, 0), { sub: `of ${money(incMonth)} / month`, help: 'Fixed costs ÷ recurring income (e.g. salary). Under 50% leaves room for saving and wants.' }) : ''}
     </div>
     ${overdue.length ? html`<div class="callout warn mt"><span class="ic">!</span><div>${overdue.length} payment${overdue.length > 1 ? 's are' : ' is'} past due and not added automatically — use <b>Mark paid</b> to log ${overdue.length > 1 ? 'them' : 'it'}.</div></div>` : ''}
-    <div class="grid g-2-1 mt">
-      <div class="card" style="padding:0"><div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>How often</th><th class="num">Amount</th><th class="num">Per month</th><th>Next</th><th></th></tr></thead><tbody>
-        ${items.map(r => html`<tr ${r.paused ? raw('style="opacity:.55"') : ''}><td><b>${catById(r.category).emoji} ${r.name}</b><div class="small muted">${catById(r.category).name}${r.auto ? ' · auto-added' : ' · reminder only'}${r.paused ? ' · paused' : ''}</div></td><td>${S.FREQS[r.freq] || r.freq}</td>
-          <td class="num ${r.type === 'income' ? 'pos' : ''}">${moneyIn(+r.amount, ccyOf(r))}</td><td class="num muted">${money(S.monthlyCost({ ...r, amount: S.val({ ...r, date: today() }) }))}</td>
-          <td class="${!r.paused && r.next < today() ? 'neg' : ''}">${r.next ? fmtDate(r.next, { month: 'short', day: 'numeric' }) : '—'}</td>
+    <div class="tabs mt" role="tablist">${TABS.map(([k, l]) => html`<a role="tab" class="${k === show ? 'on' : ''}" href="#/spending/recurring?show=${k}">${l} <span class="muted small">${count[k]}</span></a>`)}</div>
+    <div class="grid g-2-1">
+      <div class="card" style="padding:0">${list.length ? html`<div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Charged</th><th class="num">Amount</th><th class="num">Per month</th><th>Next</th><th></th></tr></thead><tbody>
+        ${list.map(r => html`<tr ${r.paused ? raw('style="opacity:.55"') : ''}><td><b>${catById(r.category).emoji} ${r.name}</b><div class="small muted">${[KIND_LABEL[recKind(r)], acctName(r.accountId) ? `from ${acctName(r.accountId)}` : '', r.auto ? 'auto-added' : 'reminder only', r.paused ? 'paused' : ''].filter(Boolean).join(' · ')}</div></td>
+          <td class="small">${scheduleText(r)}</td>
+          <td class="num ${r.type === 'income' ? 'pos' : ''}">${moneyIn(+r.amount, ccyOf(r))}</td><td class="num muted">${money(perMonth(r))}</td>
+          <td class="${!r.paused && r.next < today() ? 'neg' : ''}" style="white-space:nowrap">${r.paused ? '—' : r.next ? fmtDate(r.next, { month: 'short', day: 'numeric' }) : '—'}</td>
           <td style="text-align:right;white-space:nowrap">${!r.paused && !r.auto ? html`<button class="btn sm" data-paid="${r.id}">Mark paid</button> ` : ''}<button class="btn sm" data-pause="${r.id}">${r.paused ? 'Resume' : 'Pause'}</button> <button class="btn sm" data-edit="${r.id}">Edit</button></td></tr>`)}
-      </tbody></table></div></div>
+      </tbody></table></div>` : html`<p class="muted small" style="padding:16px">Nothing here. ${show === 'subs' ? html`<button class="btn sm" data-new="sub">+ Add subscription</button>` : ''}</p>`}</div>
       <div class="card"><div class="card-head"><h2>Next 31 days</h2></div>${up.length ? html`<div class="upcoming col">${up.map(u => html`<div class="up-item"><span class="muted small">${fmtDate(u.date, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span>${u.r.name}</span><b class="${u.type === 'income' ? 'pos' : ''}">${u.type === 'income' ? '+' : ''}${money(u.value)}</b></div>`)}</div>` : html`<p class="muted small">Nothing due.</p>`}</div>
     </div>
-    ${ex.length ? html`<div class="card mt"><div class="card-head"><h2>Where fixed costs go</h2><span class="hint">per month</span></div><div class="chart short"><canvas id="r-cat"></canvas></div></div>` : ''}`}`);
+    ${subs.length + bills.length ? html`<div class="grid g2 mt">
+      <div class="card"><div class="card-head"><h2>Where fixed costs go</h2><span class="hint">per month</span></div><div class="chart short"><canvas id="r-cat"></canvas></div></div>
+      <div class="card"><div class="card-head"><h2>By account</h2><span class="hint">what leaves each account per month</span></div>${byAccountTable([...subs, ...bills])}</div></div>` : ''}`}`);
   el.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.new !== undefined) { if (await editRecurring()) refresh(); }
+    if (b.dataset.new !== undefined) { if (await editRecurring({ kind0: b.dataset.new || 'sub' })) refresh(); }
     else if (b.dataset.edit) { if (await editRecurring(store.get('recurring', b.dataset.edit))) refresh(); }
-    else if (b.dataset.pause) { const r = store.get('recurring', b.dataset.pause); await store.put('recurring', { ...r, paused: !r.paused }); refresh(); }
+    else if (b.dataset.pause) { const r = store.get('recurring', b.dataset.pause); await store.put('recurring', { ...r, paused: !r.paused }); toast(r.paused ? `${r.name} resumed` : `${r.name} paused — no more charges added`); refresh(); }
     else if (b.dataset.paid) {
       const r = store.get('recurring', b.dataset.paid);
       await store.put('txns', S.txnFromRecurring(r, r.next > today() ? today() : r.next));
@@ -331,13 +365,34 @@ export async function recurring(el) {
       toast(`${r.name} logged`); refresh();
     }
   });
-  if (ex.length) {
-    const by = new Map(); for (const r of ex) by.set(r.category, (by.get(r.category) || 0) + S.monthlyCost({ ...r, amount: S.val({ ...r, date: today() }) }));
+  const fixed = [...subs, ...bills];
+  if (fixed.length) {
+    const by = new Map(); for (const r of fixed) by.set(r.category, (by.get(r.category) || 0) + perMonth(r));
     const rows = [...by.entries()].sort((a, b) => b[1] - a[1]);
     const p = C.palette();
     C.plainBars(el.querySelector('#r-cat'), { labels: rows.map(x => catLabel(x[0])), values: rows.map(x => x[1]), colors: rows.map(x => catColor(x[0], p)), fmt: v => money(v, { compact: true }), horizontal: true, label: 'Per month' });
   }
 }
+function byAccountTable(list) {
+  const m = new Map();
+  for (const r of list) { const k = r.accountId && store.get('nwAccounts', r.accountId) ? r.accountId : ''; const e = m.get(k) || { n: 0, v: 0 }; e.n++; e.v += perMonth(r); m.set(k, e); }
+  const rows = [...m.entries()].sort((a, b) => b[1].v - a[1].v);
+  return html`<dl class="kv">${rows.map(([k, e]) => html`<dt>${k ? acctName(k) : html`<span class="muted">No account set</span>`} <span class="muted small">${e.n}×</span></dt><dd>${money(e.v)}</dd>`)}</dl>`;
+}
+
+// Spending-page card: active subscriptions by charge day
+function subsCard() {
+  const subs = store.all('recurring').filter(r => !r.paused && S.isSubscription(r)).sort((a, b) => (+a.day || 0) - (+b.day || 0) || a.name.localeCompare(b.name));
+  const month = subs.reduce((a, r) => a + perMonth(r), 0);
+  return html`<div class="card mt"><div class="card-head"><h2>Active subscriptions</h2><div class="row"><span class="hint">${subs.length ? `${money(month)} / month · ${money(month * 12)} / year` : ''}</span><button class="btn sm" data-add-sub>+ Add subscription</button></div></div>
+    ${subs.length ? html`<div class="sub-grid">${subs.map(r => html`<button class="sub-item" data-edit-sub="${r.id}"><span class="sub-day"><b>${+r.day || +(r.next || '').slice(8, 10) || '—'}</b><small>${r.freq === 'monthly' ? 'monthly' : (S.FREQS[r.freq] || '').toLowerCase()}</small></span><span class="sub-main"><b>${catById(r.category).emoji} ${r.name}</b><small class="muted">${acctName(r.accountId) || 'no account set'} · next ${fmtDate(r.next, { month: 'short', day: 'numeric' })}</small></span><b class="sub-amt">${moneyIn(+r.amount, ccyOf(r))}</b></button>`)}</div>
+      <div class="row mt small"><a href="#/spending/recurring?show=subs">Manage subscriptions →</a></div>`
+      : html`<p class="muted small">Add Netflix, Spotify, the gym, cloud storage… with the day each is charged and the account it comes from — they're added to your transactions automatically and totalled here.</p>`}</div>`;
+}
+const wireSubs = el => {
+  el.querySelector('[data-add-sub]')?.addEventListener('click', async () => { if (await editRecurring({ kind0: 'sub' })) refresh(); });
+  el.querySelectorAll('[data-edit-sub]').forEach(b => b.onclick = async () => { if (await editRecurring(store.get('recurring', b.dataset.editSub))) refresh(); });
+};
 
 // ================= categories =================
 export async function categories(el) {

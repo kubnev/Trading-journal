@@ -27,8 +27,9 @@ const GUIDE = [
     <ul><li>The marker on each bar is where you'd be if you spent evenly through the month — ahead of it means slow down.</li>
     <li><b>Fill from my averages</b> pre-fills each limit with your recent average, so you start from reality.</li>
     <li>Leave the total blank to use the sum of the category limits.</li></ul>` },
-  { id: 'recurring', title: 'Bills & subscriptions', match: p => p === '/spending/recurring', body: `
-    <p>Everything that repeats: rent, utilities, phone, gym, streaming, insurance — and income like your salary.</p>
+  { id: 'recurring', title: 'Subscriptions & bills', match: p => p === '/spending/recurring', body: `
+    <p>Everything that repeats: subscriptions (Netflix, Spotify, gym, cloud storage…), bills (rent, utilities, phone, insurance) and income like your salary. For each one set the <b>next charge date</b> — it then repeats on that day — and the <b>account it's charged to</b>.</p>
+    <ul><li><b>Active subscriptions</b> tab lists what you're currently paying for; the Spending page shows them too, sorted by charge day.</li><li><b>By account</b> shows how much leaves each account every month.</li><li><b>Pause</b> a subscription you cancelled — no more charges are added and it moves to the Paused tab.</li></ul>
     <ul><li>With <b>add automatically</b> on, each payment is logged on its due date when you open the app. Off = a reminder you confirm with <b>Mark paid</b>.</li>
     <li><b>Fixed costs / month</b> and <b>Subscriptions / year</b> make forgotten subscriptions visible — review them once a year.</li>
     <li>Upcoming bills also show on the Overview, the Calendar and in the month-end projection.</li></ul>` },
@@ -89,7 +90,7 @@ const STEPS = [
   { sel: '.nav a[href="#/spending"]', title: 'Spending', text: 'Your month at a glance: spending vs last month and budget, categories, needs vs wants, income vs spending.' },
   { sel: '.nav a[href="#/spending/calendar"]', title: 'Calendar', text: 'What you spent each day and which bills are coming up.' },
   { sel: '.nav a[href="#/spending/budgets"]', title: 'Budgets', text: 'Set a monthly limit and get a safe amount to spend per day.' },
-  { sel: '.nav a[href="#/spending/recurring"]', title: 'Bills & subscriptions', text: 'Rent, bills, subscriptions and salary — added automatically on their due dates, with the yearly cost of every subscription.' },
+  { sel: '.nav a[href="#/spending/recurring"]', title: 'Subscriptions & bills', text: 'Your active subscriptions and bills with the day each is charged and the account it comes from — added automatically, with monthly and yearly totals.' },
   { sel: '.nav a[href="#/networth/accounts"]', title: 'Accounts', text: 'Add your cash, savings, trading capital, investments, the things you own and any debts.' },
   { sel: '.nav a[href="#/networth/update"]', title: 'Update balances', text: 'Once a month, record what each account is worth. Each update becomes a point on your net-worth history.' },
   { sel: '[data-tour=settings]', title: 'Back up your data', text: 'Everything lives only in this browser. Export a password-protected backup from Settings — you\'ll get a weekly reminder.' },
