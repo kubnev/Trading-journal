@@ -121,12 +121,27 @@ function renderShell(path) {
       <div class="theme-switch" role="radiogroup" aria-label="Theme">${['light', 'dark', 'auto'].map(t => html`<button role="radio" data-theme-set="${t}" aria-checked="${(s.theme || 'auto') === t}">${THEME_LABEL[t]}</button>`)}</div>
       <div class="mode-badge" data-tour="mode" title="How much detail the forms ask for. Every page and chart is the same in both.">Input mode: <b>${mode === 'pro' ? 'Pro' : 'Simple'}</b> · <a href="#/settings">change</a></div>
     </div>`);
-  $$('[data-theme-set]').forEach(b => b.onclick = async () => { await store.saveSettings({ theme: b.dataset.themeSet }); applyTheme(); route(); });
+  $$('[data-theme-set]').forEach(b => b.onclick = async () => { await store.saveSettings({ theme: b.dataset.themeSet }); route(); });
+}
+
+// Switching light ↔ dark cross-fades the whole page (charts included) instead of snapping.
+// View Transitions where available, a short colour transition otherwise; off for reduced motion.
+async function themeFade(update) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return update();
+  if (document.startViewTransition) { const vt = document.startViewTransition(update); await vt.updateCallbackDone.catch(() => {}); return; }
+  const root = document.documentElement;
+  root.classList.add('theme-fading');
+  try { await update(); } finally { setTimeout(() => root.classList.remove('theme-fading'), 450); }
 }
 
 let cleanup = null;
-let routing = false, again = false, dirty = false;
+let routing = false, again = false, dirty = false, fading = false;
 export async function route() {
+  if (!fading && !routing && document.documentElement.dataset.theme && resolvedTheme() !== document.documentElement.dataset.theme) {
+    fading = true;
+    try { await themeFade(() => route()); } finally { fading = false; }
+    return;
+  }
   if (routing) { again = true; return; }
   routing = true; again = false; dirty = false;
   try {
@@ -215,7 +230,7 @@ async function boot() {
   applyTheme();
   initTips();
   // In Auto mode, follow OS light/dark changes live (charts re-render with new colours)
-  darkMQ.addEventListener('change', () => { if ((store.getSettings().theme || 'auto') === 'auto') softRoute(); });
+  darkMQ.addEventListener('change', () => { if ((store.getSettings().theme || 'auto') === 'auto' && !softRoute()) themeFade(applyTheme); });
   window.addEventListener('hashchange', route);
   let rt;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (window.innerWidth < 900) document.body.classList.remove('nav-open'); }, 150); });

@@ -530,3 +530,7 @@ details.fold > summary { cursor: pointer; font-family: var(--font-serif); font-w
 .move-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; color: var(--text); text-decoration: none; padding: 2px 0; }
 .move-row:hover .ellipsis { color: var(--accent); }
 .first-snap { display: flex; flex-direction: column; justify-content: center; min-height: 220px; gap: 6px; }
+
+/* light ↔ dark: a gentle cross-fade instead of a flash */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .45s; animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+.theme-fading, .theme-fading *, .theme-fading *::before, .theme-fading *::after { transition: background-color .4s ease, color .4s ease, border-color .4s ease, fill .4s ease, stroke .4s ease, box-shadow .4s ease !important; }
