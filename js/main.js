@@ -5,9 +5,11 @@ import { checkForUpdate, applyUpdate } from './version.js';
 
 import homeView from './home.js';
 import settingsView from './settings.js';
-import * as T from './trading/views.js';
+import * as SP from './spend/views.js';
+import { txnModal } from './spend/txn.js';
+import { postDueRecurring } from './spend/calc.js';
+import { migrateLegacy } from './migrate.js';
 import * as N from './networth/views.js';
-import * as J from './journal/views.js';
 import { openHelp, maybeStartTour } from './help.js';
 import { exportBackupFlow } from './backup.js';
 import { initTips } from './tips.js';
@@ -34,26 +36,20 @@ const I = {
 };
 const NAV = [
   { group: null, items: [{ path: '/', label: 'Overview', icon: I.home }] },
+  { group: 'Spending', items: [
+    { path: '/spending', label: 'Spending', icon: I.chart },
+    { path: '/spending/transactions', label: 'Transactions', icon: I.list },
+    { path: '/spending/calendar', label: 'Calendar', icon: I.cal },
+    { path: '/spending/budgets', label: 'Budgets', icon: I.target },
+    { path: '/spending/recurring', label: 'Bills & subscriptions', icon: I.refresh },
+    { path: '/spending/categories', label: 'Categories', icon: I.book },
+  ] },
   { group: 'Net worth', items: [
     { path: '/networth', label: 'Net worth', icon: I.grid },
     { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
-    { path: '/networth/update', label: 'Update balances', icon: I.refresh },
+    { path: '/networth/update', label: 'Update balances', icon: I.flow },
     { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
-    { path: '/networth/cashflow', label: 'Cash flow', icon: I.flow },
     { path: '/networth/plan', label: 'FI planning', icon: I.star },
-  ] },
-  { group: 'Journal', items: [
-    { path: '/journal', label: 'Today', icon: I.pen },
-    { path: '/journal/history', label: 'History', icon: I.cal },
-    { path: '/journal/insights', label: 'Insights', icon: I.bulb },
-  ] },
-  { group: 'Trading', items: [
-    { path: '/trading/positions', label: 'Open positions', icon: I.target },
-    { path: '/trading/trades', label: 'Trade log', icon: I.list },
-    { path: '/trading', label: 'Performance', icon: I.chart },
-    { path: '/trading/reports', label: 'Reports', icon: I.chart },
-    { path: '/trading/playbook', label: 'Playbook', icon: I.book },
-    { path: '/trading/accounts', label: 'Trading accounts', icon: I.bank },
   ] },
 ];
 const ALL_ITEMS = NAV.flatMap(g => g.items);
@@ -61,27 +57,20 @@ const ALL_ITEMS = NAV.flatMap(g => g.items);
 const ROUTES = [
   [/^\/$/, homeView],
   [/^\/settings$/, settingsView],
-  [/^\/trading$/, T.dashboard],
-  [/^\/trading\/positions$/, T.positions],
-  [/^\/trading\/trades$/, T.tradeList],
-  [/^\/trading\/new$/, T.tradeEdit],
-  [/^\/trading\/trade\/([\w-]+)$/, T.tradeDetail],
-  [/^\/trading\/trade\/([\w-]+)\/edit$/, T.tradeEdit],
-  [/^\/trading\/reports$/, T.reports],
-  [/^\/trading\/playbook$/, T.playbook],
-  [/^\/trading\/accounts$/, T.accounts],
-  [/^\/journal$/, J.today],
-  [/^\/journal\/history$/, J.history],
-  [/^\/journal\/insights$/, J.insights],
+  [/^\/spending$/, SP.dashboard],
+  [/^\/spending\/transactions$/, SP.transactions],
+  [/^\/spending\/calendar$/, SP.calendar],
+  [/^\/spending\/budgets$/, SP.budgets],
+  [/^\/spending\/recurring$/, SP.recurring],
+  [/^\/spending\/categories$/, SP.categories],
   [/^\/networth$/, N.overview],
   [/^\/networth\/update$/, N.update],
   [/^\/networth\/accounts$/, N.accounts],
   [/^\/networth\/analytics$/, N.analytics],
-  [/^\/networth\/cashflow$/, N.cashflow],
   [/^\/networth\/plan$/, N.plan],
-];
+]
 // old links keep working
-const REDIRECTS = { '/trading/journal': '/journal', '/trading/calendar': '/journal/history' };
+const REDIRECTS = { '/networth/cashflow': '/spending', '/trading': '/', '/journal': '/' };
 
 const icon = d => raw(`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`);
 
@@ -89,7 +78,6 @@ export const currentPath = () => (location.hash.replace(/^#/, '').split('?')[0] 
 export const query = () => new URLSearchParams(location.hash.split('?')[1] || '');
 export const go = path => { location.hash = '#' + path; };
 
-function sectionOf(path) { return path.startsWith('/networth') ? 'networth' : path.startsWith('/trading') ? 'trading' : null; }
 
 const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
 const resolvedTheme = () => { const t = store.getSettings().theme; return t === 'auto' || !t ? (darkMQ.matches ? 'dark' : 'light') : t; };
@@ -107,9 +95,10 @@ function renderShell(path) {
   const s = store.getSettings();
   const mode = s.mode;
   // most specific nav item that matches the current path
-  const match = ALL_ITEMS.filter(i => i.path === path || (i.path !== '/' && path.startsWith(i.path + '/')) || (i.path === '/trading/trades' && path.startsWith('/trading/trade'))).sort((a, b) => b.path.length - a.path.length)[0];
+  const match = ALL_ITEMS.filter(i => i.path === path || (i.path !== '/' && path.startsWith(i.path + '/'))).sort((a, b) => b.path.length - a.path.length)[0];
   $('#sidebar').innerHTML = String(html`
-    <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Journal</span><span class="beta">beta</span></a>
+    <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Ledgerline</span><span class="beta">beta</span></a>
+    <button class="btn primary add-main" data-quick-add data-tour="add" title="Add an expense or income (shortcut: N)">+ Add expense</button>
     <nav class="nav" data-tour="nav">${NAV.map(g => html`${g.group ? html`<div class="nav-group">${g.group}</div>` : ''}${g.items.map(i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`)}`)}</nav>
     <div class="sidebar-foot">
       <a href="#/settings" data-tour="settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
@@ -127,6 +116,7 @@ export async function route() {
   routing = true; again = false; dirty = false;
   try {
     const path = currentPath();
+    if (!REDIRECTS[path] && /^\/(trading|journal)(\/|$)/.test(path)) { routing = false; location.replace('#/'); return; }   // pages from the old version
     if (REDIRECTS[path]) { routing = false; location.replace('#' + REDIRECTS[path] + (location.hash.includes('?') ? '?' + location.hash.split('?')[1] : '')); return; }
     applyTheme();
     renderShell(path);
@@ -137,19 +127,19 @@ export async function route() {
     let view = null, params = [];
     for (const [re, v] of ROUTES) { const m = path.match(re); if (m) { view = v; params = m.slice(1); break; } }
     document.body.classList.toggle('home', path === '/');
-    if (!view) { main.innerHTML = `<div class="page"><h1>Not found</h1><p><a href="#/">Go home</a></p></div>`; return; }
     main.innerHTML = '';
     const page = document.createElement('div');
     page.className = 'page';
     main.append(page);
     // first launch: choose Simple or Pro input before anything else
     if (!modeChosen()) { chooserView(page, () => { route(); maybeStartTour(); }); return; }
+    if (!view) { page.innerHTML = `<h1>Not found</h1><p><a href="#/">Go home</a></p>`; return; }
     cleanup = await view(page, params, { mode: store.getSettings().mode });
     notices(page);
     main.scrollTop = 0;
     window.scrollTo(0, 0);
     const h = page.querySelector('h1');
-    document.title = (h ? h.textContent + ' · ' : '') + 'Journal';
+    document.title = (h ? h.textContent + ' · ' : '') + 'Ledgerline';
     // a newly used currency gets real exchange rates without needing a reload
     ensureRates().then(r => { if (r && !r.skipped && r.ok) softRoute(); }).catch(() => {});
   } catch (e) {
@@ -169,7 +159,7 @@ const dismissed = new Set();
 function notices(page, only) {
   const s = store.getSettings();
   const own = c => store.all(c).some(x => !x.demo);
-  const hasData = own('trades') || own('nwAccounts') || own('days');
+  const hasData = own('txns') || own('nwAccounts');
   const stale = !s.lastBackupAt || Date.now() - new Date(s.lastBackupAt) > 7 * 864e5;
   const items = [];
   if (currenciesInUse().length && usingFallback() && !dismissed.has('fx')) items.push(['fx', 'Exchange rates haven\'t loaded yet — other currencies are converted with approximate rates.', 'Retry']);
@@ -212,6 +202,13 @@ async function boot() {
   $$('[data-help]').forEach(b => b.onclick = () => openHelp(currentPath()));
   document.addEventListener('keydown', e => { if (e.key === '?' && !e.target.closest('input,textarea,select')) openHelp(currentPath()); });
   $('#sidebar').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
+  // quick add from anywhere: sidebar / top-bar button or the N key
+  const quickAdd = async () => { document.body.classList.remove('nav-open'); if (!modeChosen() || document.querySelector('.modal-wrap')) return; if (await txnModal()) route(); };
+  document.addEventListener('click', e => { if (e.target.closest('[data-quick-add]')) quickAdd(); });
+  document.addEventListener('keydown', e => { if ((e.key === 'n' || e.key === 'N') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.closest('input,textarea,select,[contenteditable]')) { e.preventDefault(); quickAdd(); } });
+  // one-time conversion from the old trading-journal version, then post any bills that came due
+  try { await migrateLegacy(); await migrateCurrencies(); } catch (e) { console.error(e); }
+  try { await postDueRecurring(); } catch (e) { console.error(e); }
   route();
   if (modeChosen()) maybeStartTour();
   // exchange rates for multi-currency data (cached; refreshed at most twice a day)

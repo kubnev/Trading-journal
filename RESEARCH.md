@@ -1,5 +1,44 @@
 # Research notes & design decisions
 
+## Part 0 — Expense tracking (v1.0, finance-only app)
+
+The app was split in v1.0: the trading journal and daily journal moved to the archive branch, and the app became a finance tracker (spending + net worth). Research summary for the spending side:
+
+**What good expense trackers do** (Rocket Money, Simplifi, Monarch, Copilot, YNAB and similar):
+- quick manual entry
+- customizable categories (emoji, user-defined)
+- budgets per category and overall
+- recurring-bill / subscription detection with an annual-cost view
+- a calendar of spending and upcoming bills
+- spending trends and month-over-month comparison
+- payee/merchant breakdowns
+
+**Categories:** keep 10–20 main categories and add subcategories only when you'll act on them. Categories carry budgets; tags are free-form labels across categories (e.g. a trip). Split a transaction only when it adds value — not implemented in v1.
+
+**50/30/20 rule:** of after-tax income, about 50% goes to needs (housing, utilities, groceries, transport, insurance, minimum debt payments), 30% to wants (dining out, entertainment, travel, hobbies) and 20% to savings. Each category is tagged need or want, and "saved" = income − spending. Moving money into savings is *not* logged as spending.
+
+**Fixed vs variable:** fixed costs (rent, insurance, subscriptions) are predictable and compound silently, so they're worth an annual audit. The app shows monthly fixed costs, cost per year and subscriptions per year.
+
+**Pace / safe to spend:** daily budgeting apps (DaySum, DailyBudget, BUDGT) show "budget left ÷ days left". This app also subtracts bills still due this month. The month-end projection = spent so far + current daily pace × days left + bills still due.
+
+**Sources:**
+- [CNBC — best expense tracker apps](https://www.cnbc.com/select/best-expense-tracker-apps/)
+- [Engadget — best budgeting apps](https://www.engadget.com/apps/best-budgeting-apps-120036303.html)
+- [NerdWallet — 50/30/20 calculator](https://www.nerdwallet.com/finance/learn/nerdwallet-budget-calculator)
+- [Ramsey — 50/30/20 explained](https://www.ramseysolutions.com/budgeting/50-20-30-budget-rule)
+- [Quicken — categories and tags](https://www.quicken.com/blog/best-tools-for-tracking-and-managing-expenses-with-detailed-categories-and-tags-2026/)
+- [Quicken — splitting a transaction](https://info.quicken.com/sim/splitting-a-transaction-across-categories)
+- [Expense categorisation guide](https://expensekitapp.com/blog/5-smart-ways-to-categorize-expenses/)
+- [PocketGuard — recurring expenses](https://pocketguard.com/blog/recurring-and-non-recurring-expenses/)
+- [Subscription audit](https://usfinancecalculators.com/personal-finance/subscription-audit-annual-cost-calculator/)
+- [DaySum (safe-to-spend)](https://apps.apple.com/us/app/daysum-daily-spending-limit/id6778561064)
+- [BUDGT](https://www.budgt.ch/)
+
+---
+
+*The notes below are from the earlier trading-journal version and are kept for reference; the net-worth parts still apply.*
+
+
 What a serious trading journal and a net-worth tracker need, and how each finding maps to the app. Sources at the bottom.
 
 ---

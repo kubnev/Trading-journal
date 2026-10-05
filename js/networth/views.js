@@ -136,7 +136,7 @@ export async function overview(el, _p, { mode }) {
         <tbody>${accts.filter(a => !a.archivedAt).sort((a, b) => (a.kind === 'liability') - (b.kind === 'liability') || (cur.byAcct[b.id] || 0) - (cur.byAcct[a.id] || 0)).map(a => {
           const v = cur.byAcct[a.id] || 0, pv = prev ? prev.byAcct[a.id] || 0 : null;
           const d = pv == null ? null : (a.kind === 'liability' ? -(v - pv) : v - pv);
-          return html`<tr><td><b>${a.name}</b>${a.institution ? html` <span class="muted small">${a.institution}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked</span>` : ''}</td><td>${typeLabel(a)}</td>${pro ? html`<td>${a.kind === 'liability' ? '' : isLiquid(a) ? 'Yes' : 'No'}</td>` : ''}
+          return html`<tr><td><b>${a.name}</b>${a.institution ? html` <span class="muted small">${a.institution}</span>` : ''}</td><td>${typeLabel(a)}</td>${pro ? html`<td>${a.kind === 'liability' ? '' : isLiquid(a) ? 'Yes' : 'No'}</td>` : ''}
             <td class="num ${a.kind === 'liability' ? 'neg' : ''}">${money(a.kind === 'liability' ? -v : v)}</td><td class="num ${pnlClass(d)}">${d ? money(d, { sign: true }) : '—'}</td><td class="num">${a.kind === 'liability' ? '' : pct(cur.assets ? v / cur.assets : null, 1)}</td>${pro ? html`<td><div style="height:28px;width:110px"><canvas data-spark="${a.id}"></canvas></div></td>` : ''}</tr>`;
         })}</tbody>
         <tfoot><tr><td colspan="${pro ? 3 : 2}">Net worth</td><td class="num">${money(cur.net)}</td><td class="num ${pnlClass(ch)}">${ch != null ? money(ch, { sign: true }) : ''}</td><td colspan="${pro ? 2 : 1}"></td></tr></tfoot></table></div></div>`);
@@ -189,8 +189,8 @@ export async function update(el) {
         if (!list.length) return '';
         return html`<fieldset><legend>${l}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
           const v = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcctNative[a.id] || '';
-          return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)} · ${typeLabel(a)}${a.linkedTradingAccountId ? ' · auto from trading journal' : a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
-            <input type="number" step="any" name="${a.id}" value="${a.linkedTradingAccountId ? Math.round(prior.byAcctNative[a.id] * 100) / 100 : a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.linkedTradingAccountId || a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
+          return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)} · ${typeLabel(a)}${a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
+            <input type="number" step="any" name="${a.id}" value="${a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
         })}</div></fieldset>`;
       })}
       <div class="calc-preview" id="pv"></div>
@@ -212,7 +212,7 @@ export async function update(el) {
   form.onsubmit = async e => {
     e.preventDefault();
     const balances = {};
-    for (const a of accts) if (!a.linkedTradingAccountId && !a.tracksHoldings) { const v = form.elements[a.id].value; if (v !== '') balances[a.id] = a.kind === 'liability' ? Math.abs(+v) : +v; }
+    for (const a of accts) if (!a.tracksHoldings) { const v = form.elements[a.id].value; if (v !== '') balances[a.id] = a.kind === 'liability' ? Math.abs(+v) : +v; }
     await store.put('nwSnapshots', { ...(existing || {}), date, balances: { ...(existing?.balances || {}), ...balances } });
     toast('Snapshot saved'); go('/networth');
   };
@@ -231,7 +231,6 @@ const currentBalance = a => Math.round((pointAt(today()).byAcctNative[a.id] || 0
 const balField = a => html`<label class="field bal">${a.id ? 'Balance today' : 'Current balance'}${a.id ? html` <span class="hint">change it to record today's value — earlier history is kept</span>` : ''}<input name="balance" type="number" step="any" value="${a.id && !a.archivedAt ? currentBalance(a) : ''}" placeholder="${a.kind === 'liability' ? 'amount owed' : ''}" ${a.archivedAt ? raw('disabled') : ''}></label>`;
 
 async function editAccountSimple(a) {
-  const tAccts = store.all('tAccounts');
   const g0 = a.id ? groupOf(a) : a.kind === 'liability' ? 'debt' : 'cash';
   const types = [...GROUPS, DEBT];
   const res = await modal({
@@ -244,7 +243,6 @@ async function editAccountSimple(a) {
       ${balField(a)}
       <label class="field yld">Interest / yield (APY %) <span class="hint">optional</span><input name="apy" type="number" step="any" min="0" max="100" value="${a.apy ?? ''}" placeholder="e.g. 3.5"></label>
       <label class="field lia">Interest rate (APR %) <span class="hint">optional</span><input name="rate" type="number" step="any" min="0" value="${a.rate ?? ''}"></label>
-      ${tAccts.length ? html`<label class="field span2 lnk">Link to trading account <span class="hint">balance follows the journal</span><select name="linkedTradingAccountId"><option value="">— not linked —</option>${tAccts.map(t => html`<option value="${t.id}" ${a.linkedTradingAccountId === t.id ? raw('selected') : ''}>${t.name}</option>`)}</select></label>` : ''}
       <label class="check full hld"><input type="checkbox" name="tracksHoldings" ${a.tracksHoldings ? raw('checked') : ''}> List what I hold (e.g. 0.5 BTC, 10 AAPL) and update prices automatically</label>
     </form>`),
     onMount: w => {
@@ -253,10 +251,9 @@ async function editAccountSimple(a) {
         const g = f.group.value, show = (sel, on) => { const e = w.querySelector(sel); if (e) e.hidden = !on; };
         show('.yld', g === 'cash' || g === 'savings' || g === 'investments');
         show('.lia', g === 'debt');
-        show('.lnk', g === 'trading');
         show('.hld', g === 'trading' || g === 'investments');
         const hl = f.tracksHoldings; if (w.querySelector('.hld').hidden) hl.checked = false;
-        show('.bal', !hl.checked && !(g === 'trading' && f.linkedTradingAccountId?.value));
+        show('.bal', !hl.checked);
       };
       f.addEventListener('change', sync); sync();
     },
@@ -269,17 +266,14 @@ async function editAccountSimple(a) {
   const obj = { ...a, name: res.name.trim(), currency: res.currency || displayCcy(),
     kind: isDebt ? 'liability' : 'asset', category: same ? a.category : groupInfo(g).cat,
     apy: isDebt ? null : toNum(res.apy), rate: isDebt ? toNum(res.rate) : null,
-    linkedTradingAccountId: g === 'trading' ? res.linkedTradingAccountId || '' : '',
+    linkedTradingAccountId: '',
     tracksHoldings: (g === 'trading' || g === 'investments') && !!res.tracksHoldings, holdings: a.holdings || [] };
   if (!same) Object.assign(obj, { custody: '', purpose: '', liquid: null, investable: null, payment: isDebt ? a.payment : null });
-  if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
-  if (obj.linkedTradingAccountId) obj.currency = store.get('tAccounts', obj.linkedTradingAccountId)?.currency || obj.currency;
   return finishAccountSave(a, obj, res);
 }
 
 async function editAccount(a = { kind: 'asset', category: 'cash' }) {
   if (simpleMode()) return editAccountSimple(a);
-  const tAccts = store.all('tAccounts');
   const catOpts = kind => (kind === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}" ${a.category === c.id ? raw('selected') : ''}>${c.label}</option>`);
   const res = await modal({
     title: a.id ? `Edit ${a.name}` : 'Add account', wide: true,
@@ -301,7 +295,6 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
         <label class="field">Liquid?<select name="liquid"><option value="">Auto (by category)</option><option value="yes" ${a.liquid === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.liquid === false ? raw('selected') : ''}>No</option></select></label>
         <label class="field">Counts toward financial independence? <span class="hint">invested money that grows and could fund retirement</span><select name="investable"><option value="">Auto (by category)</option><option value="yes" ${a.investable === true ? raw('selected') : ''}>Yes</option><option value="no" ${a.investable === false ? raw('selected') : ''}>No</option></select></label>
         <label class="check full"><input type="checkbox" name="tracksHoldings" ${a.tracksHoldings ? raw('checked') : ''}> Track individual holdings (crypto / stocks) — value = quantity × price, with one-click price updates</label>
-        ${tAccts.length ? html`<label class="field span2">Link to trading account <span class="hint">balance follows the journal</span><select name="linkedTradingAccountId"><option value="">— not linked —</option>${tAccts.map(t => html`<option value="${t.id}" ${a.linkedTradingAccountId === t.id ? raw('selected') : ''}>${t.name}</option>`)}</select></label>` : ''}
       </div>
       <label class="field full">Notes<input name="notes" value="${a.notes || ''}"></label>
     </form>`),
@@ -309,8 +302,8 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
       const f = w.querySelector('#nf');
       const purp = () => { f.purposeOther.hidden = f.purpose.value !== '__custom'; if (!f.purposeOther.hidden) f.purposeOther.focus(); f.purpose.options[0].textContent = `Auto (${purposeOf({ category: f.category.value })})`; };
       f.purpose.onchange = purp; f.category.addEventListener('change', purp);
-      const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; const bal = w.querySelector('.bal'); if (bal) bal.hidden = !li && (f.tracksHoldings.checked || !!f.linkedTradingAccountId?.value); };
-      f.tracksHoldings.onchange = sync; if (f.linkedTradingAccountId) f.linkedTradingAccountId.onchange = sync;
+      const sync = () => { const li = f.kind.value === 'liability'; w.querySelector('.lia').hidden = !li; w.querySelector('.ast').hidden = li; const bal = w.querySelector('.bal'); if (bal) bal.hidden = !li && f.tracksHoldings.checked; };
+      f.tracksHoldings.onchange = sync;
       f.kind.onchange = () => { f.category.innerHTML = String(html`${(f.kind.value === 'liability' ? LIAB_CATS : ASSET_CATS).map(c => html`<option value="${c.id}">${c.label}</option>`)}`); sync(); purp(); };
       sync();
     },
@@ -319,12 +312,10 @@ async function editAccount(a = { kind: 'asset', category: 'cash' }) {
   if (!res || typeof res !== 'object') return null;
   const yn = v => (v === 'yes' ? true : v === 'no' ? false : null);
   const obj = { ...a, kind: res.kind, category: res.category, name: res.name.trim(), institution: res.institution, notes: res.notes,
-    rate: toNum(res.rate), payment: toNum(res.payment), liquid: yn(res.liquid), investable: yn(res.investable), linkedTradingAccountId: res.kind === 'liability' ? '' : res.linkedTradingAccountId || '', currency: res.currency || displayCcy(),
+    rate: toNum(res.rate), payment: toNum(res.payment), liquid: yn(res.liquid), investable: yn(res.investable), linkedTradingAccountId: '', currency: res.currency || displayCcy(),
     tracksHoldings: res.kind !== 'liability' && !!res.tracksHoldings, holdings: a.holdings || [],
     custody: res.kind === 'liability' ? '' : res.custody, purpose: res.kind === 'liability' ? '' : ((res.purpose === '__custom' ? res.purposeOther : res.purpose) || '').trim().slice(0, 40), apy: res.kind === 'liability' ? null : toNum(res.apy) };
-  if (obj.tracksHoldings) obj.linkedTradingAccountId = '';
   // a linked account is valued in its trading account's currency
-  if (obj.linkedTradingAccountId) obj.currency = store.get('tAccounts', obj.linkedTradingAccountId)?.currency || obj.currency;
   return finishAccountSave(a, obj, res);
 }
 
@@ -334,7 +325,7 @@ async function finishAccountSave(a, obj, res) {
   if (saved.tracksHoldings && !a.tracksHoldings) { await editHoldings(saved); return saved; }
   // a changed balance is recorded for today (earlier snapshots keep the history)
   const changed = res.balance !== '' && res.balance != null && (before == null || Math.abs(Math.abs(+res.balance) - before) >= 0.005);
-  if (!saved.tracksHoldings && !saved.linkedTradingAccountId && !saved.archivedAt && changed) {
+  if (!saved.tracksHoldings && !saved.archivedAt && changed) {
     const d = today();
     const snap = store.all('nwSnapshots').find(s => s.date === d);
     await store.put('nwSnapshots', { ...(snap || { date: d }), balances: { ...(snap?.balances || {}), [saved.id]: Math.abs(+res.balance) } });
@@ -398,7 +389,7 @@ export async function accounts(el, _p, { mode }) {
   const cur = pointAt(today());
   const sec = (title, list) => html`<div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>${title}</h2><span class="hint">${money(list.filter(a => !a.archivedAt).reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0))}</span></div>
     <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Category</th><th>Institution</th>${pro ? raw('<th>Details</th>') : ''}<th class="num">Latest balance</th><th></th></tr></thead><tbody>
-    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${a.linkedTradingAccountId ? html` <span class="tag accent">linked to journal</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}</td><td>${typeLabel(a)}</td><td>${a.institution || ''}</td>
+    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}</td><td>${typeLabel(a)}</td><td>${a.institution || ''}</td>
       ${pro ? html`<td class="small muted">${a.kind === 'liability' ? [a.rate ? `${a.rate}% APR` : '', a.payment ? `${moneyIn(+a.payment, ccyOf(a))}/mo` : ''].filter(Boolean).join(' · ') : [custodyLabel(custodyOf(a)), purposeOf(a), +a.apy ? `${a.apy}% APY` : '', isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>` : ''}
       <td class="num">${moneyIn(cur.byAcctNative[a.id] || 0, ccyOf(a))}${!sameMoney(ccyOf(a), displayCcy()) ? html`<div class="dist">≈ ${money(cur.byAcct[a.id] || 0)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
@@ -432,58 +423,6 @@ export async function accounts(el, _p, { mode }) {
       await store.del('nwAccounts', a.id); refresh();
     }
   });
-}
-
-// ================= cash flow =================
-export async function cashflow(el) {
-  const months = cashflowMonths();
-  const t12 = trailing(months), t3 = trailing(months, 3);
-  const cm = monthKey(new Date());
-  el.innerHTML = String(html`<div class="page-head"><div><h1>Cash flow</h1><div class="sub">Monthly income and spending. Drives savings rate, emergency-fund months, FI number and the savings-vs-market split.</div></div></div>
-    <div class="grid g-1-2">
-      <form class="card" id="cf"><div class="card-head"><h2>Log a month</h2></div><div class="form-grid" style="grid-template-columns:1fr 1fr">
-        <label class="field">Month<input type="month" name="id" value="${cm}" required></label>
-        <label class="field">Currency${raw(ccySelect('currency', displayCcy()))}</label>
-        <label class="field">Income <span class="hint">take-home</span><input name="income" type="number" step="any" min="0" required></label>
-        <label class="field">Expenses <span class="hint">all spending</span><input name="expenses" type="number" step="any" min="0" required></label>
-        <label class="field full">Note<input name="note" placeholder="bonus, big purchase…"></label></div>
-        <p class="small muted mt">Tip: income = net pay + trading withdrawals + other income. Money moved into investments is savings, not an expense.</p>
-        <div class="row"><span class="spacer"></span><button class="btn primary">Save month</button></div></form>
-      <div class="stack">
-        <div class="stats">
-          ${stat('Savings rate (12m)', pct(t12.rate, 1), { cls: pnlClass(t12.rate) })}
-          ${stat('Savings rate (3m)', pct(t3.rate, 1), { cls: pnlClass(t3.rate) })}
-          ${stat('Avg monthly income', money(t12.avgIncome))}
-          ${stat('Avg monthly expenses', money(t12.avgExpenses))}
-          ${stat('Saved (12m)', money(t12.savings, { sign: true }), { cls: pnlClass(t12.savings) })}
-        </div>
-        <div class="card"><div class="card-head"><h2>Income vs expenses</h2></div><div class="chart"><canvas id="c-ie"></canvas></div></div>
-      </div>
-    </div>
-    ${months.length ? html`<div class="grid g2 mt"><div class="card"><div class="card-head"><h2>Savings rate</h2><span class="hint">monthly</span></div><div class="chart short"><canvas id="c-sr"></canvas></div></div>
-      <div class="card" style="padding:0"><div class="table-wrap" style="border:0;max-height:260px"><table class="data compact"><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Saved</th><th class="num">Rate</th><th></th></tr></thead>
-      <tbody>${[...months].reverse().map(m => html`<tr><td>${fmtMonth(m.id)}${m.note ? html` <span class="muted small">${m.note}</span>` : ''}</td><td class="num">${ccyOf(m) !== displayCcy() ? html`<span title="${moneyIn(m.nativeIncome, ccyOf(m))}">${money(m.income)}</span>` : money(m.income)}</td><td class="num">${ccyOf(m) !== displayCcy() ? html`<span title="${moneyIn(m.nativeExpenses, ccyOf(m))}">${money(m.expenses)}</span>` : money(m.expenses)}</td><td class="num ${pnlClass(m.savings)}">${money(m.savings, { sign: true })}</td><td class="num">${pct(m.rate, 0)}</td><td><button class="btn sm" data-edit="${m.id}">Edit</button> <button class="icon-btn" data-del="${m.id}" aria-label="Delete">✕</button></td></tr>`)}</tbody></table></div></div></div>` : ''}`);
-  const form = el.querySelector('#cf');
-  form.onsubmit = async e => {
-    e.preventDefault();
-    const f = formData(form);
-    await store.put('nwCashflow', { ...(store.get('nwCashflow', f.id) || {}), id: f.id, income: +f.income, expenses: +f.expenses, note: f.note, currency: f.currency || displayCcy() });
-    toast(`${fmtMonth(f.id)} saved`); refresh();
-  };
-  el.addEventListener('click', async e => {
-    const b = e.target.closest('button');
-    if (b?.dataset.edit) { const m = store.get('nwCashflow', b.dataset.edit); form.elements.id.value = m.id; form.income.value = m.income; form.expenses.value = m.expenses; form.currency.value = ccyOf(m); form.note.value = m.note || ''; form.income.focus(); }
-    if (b?.dataset.del) { if (await confirmDlg('Delete month?', `Delete ${fmtMonth(b.dataset.del)}?`)) { await store.del('nwCashflow', b.dataset.del); refresh(); } }
-  });
-  const p = C.palette();
-  const last = months.slice(-24);
-  const labels = last.map(m => fmtMonth(m.id));
-  C.make(el.querySelector('#c-ie'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Income', data: last.map(m => m.income), backgroundColor: p.series[0], maxBarThickness: 16 }, { label: 'Expenses', data: last.map(m => m.expenses), backgroundColor: p.series[1], maxBarThickness: 16 }] },
-    options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}`, footer: it => `Saved: ${money(last[it[0].dataIndex].savings, { sign: true })}` } } }, scales: { x: C.plainAxis({ ticks: { maxRotation: 0, autoSkipPadding: 10 } }), y: C.moneyAxis({ beginAtZero: true }) } },
-  });
-  if (months.length) C.signBars(el.querySelector('#c-sr'), { labels, values: last.map(m => (m.rate ?? 0) * 100), fmt: v => num(v, 0) + '%', axisFmt: v => v + '%' });
 }
 
 // ================= FI planning =================

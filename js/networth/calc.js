@@ -1,6 +1,5 @@
 // Net worth calculations. Pure functions over the store.
 import { all, getSettings } from '../store.js';
-import { accountEquityAt } from '../trading/calc.js';
 import { toDisplay, ccyOf } from '../fx.js';
 import { today, monthKey, parseDay } from '../ui.js';
 
@@ -86,7 +85,6 @@ const sortedSnaps = () => [...all('nwSnapshots')].sort((a, b) => a.date.localeCo
 // Value of one account on a date (carry-forward of the latest snapshot on/before the date)
 export function valueAt(acct, date, snaps = sortedSnaps()) {
   if (acct.archivedAt && date >= acct.archivedAt) return 0;
-  if (acct.linkedTradingAccountId) return accountEquityAt(acct.linkedTradingAccountId, date) ?? 0;
   let v = null, from = null;
   for (const s of snaps) { if (s.date > date) break; if (s.balances && acct.id in s.balances && s.balances[acct.id] !== null && s.balances[acct.id] !== '') { v = +s.balances[acct.id]; from = s.date; } }
   // Fixed-yield accounts (savings, money-market funds, staking) grow daily from the last recorded balance
@@ -141,22 +139,30 @@ export function nwSeries() {
   const snaps = sortedSnaps();
   const dates = [...new Set(snaps.map(s => s.date))];
   if (!all('nwAccounts').length) return [];
-  if (all('nwAccounts').some(a => a.linkedTradingAccountId || +a.apy > 0) && dates.length && dates.at(-1) < today()) dates.push(today());
+  if (all('nwAccounts').some(a => +a.apy > 0) && dates.length && dates.at(-1) < today()) dates.push(today());
   if (!dates.length) return [];
   return dates.map(d => pointAt(d, snaps));
 }
 
 // ---------- cash flow ----------
+// Monthly income & spending, built from the Spending section's transactions (display currency)
 export function cashflowMonths() {
-  return [...all('nwCashflow')].sort((a, b) => a.id.localeCompare(b.id)).map(c => {
-    const cur = ccyOf(c), d = c.id + '-15';
-    const income = toDisplay(+c.income || 0, cur, d), expenses = toDisplay(+c.expenses || 0, cur, d);
-    return { ...c, nativeIncome: +c.income || 0, nativeExpenses: +c.expenses || 0, income, expenses, savings: income - expenses, rate: income ? (income - expenses) / income : null };
-  });
+  const m = new Map();
+  for (const t of all('txns')) {
+    if (t.exclude || !t.date) continue;
+    const k = t.date.slice(0, 7), e = m.get(k) || { id: k, income: 0, expenses: 0 };
+    const v = toDisplay(+t.amount || 0, ccyOf(t), t.date);
+    if (t.type === 'income') e.income += v; else e.expenses += v;
+    m.set(k, e);
+  }
+  return [...m.values()].sort((a, b) => a.id.localeCompare(b.id)).map(c => ({ ...c, savings: c.income - c.expenses, rate: c.income ? (c.income - c.expenses) / c.income : null }));
 }
 
+// Last n months; the month in progress is left out once there's a full month of history
 export function trailing(months, n = 12) {
-  const m = months.slice(-n);
+  const cur = today().slice(0, 7);
+  const done = months.length > 1 && months.at(-1).id === cur ? months.slice(0, -1) : months;
+  const m = done.slice(-n);
   const inc = m.reduce((a, x) => a + x.income, 0), exp = m.reduce((a, x) => a + x.expenses, 0);
   return { months: m.length, income: inc, expenses: exp, savings: inc - exp, rate: inc ? (inc - exp) / inc : null, avgExpenses: m.length ? exp / m.length : null, avgSavings: m.length ? (inc - exp) / m.length : null, avgIncome: m.length ? inc / m.length : null };
 }

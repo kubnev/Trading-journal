@@ -1,33 +1,47 @@
-# Journal — trading journal & net worth tracker
+# Ledgerline — spending & net worth tracker
 
-A private, local-first web app for three things:
+A private, local-first finance tracker that runs in the browser. It does two things:
 
-- **Net worth:**
-  - Accounts and holdings (live crypto/stock prices).
-  - Fixed-yield accounts that grow daily.
-  - Custody and purpose buckets.
-  - Analytics with a balance-sheet health check.
-  - Cash flow and FI planning.
-- **Daily journal:**
-  - Mood, energy and sleep check-in, with habits and intentions.
-  - Reflection, plus a check-in on each open position.
-  - Insights.
-- **Swing trading:**
-  - Thesis-first trade log.
-  - Open positions with live P&L and portfolio heat.
-  - Performance and reports by setup, catalyst, holding period and exit reason.
-  - Playbook.
+- **Spending** — log expenses and income in seconds (button or the `N` key), see where money goes month by month, set budgets, and track bills & subscriptions.
+- **Net worth** — everything you own and owe, valued over time, with analytics and financial-independence planning.
 
-A **?** button (top right, or the `?` key) opens page help and a guided tour.
+Everything is stored in the browser (IndexedDB). There is no server, no account and no tracking, and backups are password-encrypted.
 
-One global **Simple / Pro** switch (top of the sidebar) applies to both sections. Simple shows the essentials; Pro unlocks every field, report and chart. Both modes use the same data.
+**Live:** https://kubnev.github.io/Trading-journal/
 
-**All data stays in the visitor's own browser** (IndexedDB). There is no server, account or tracking. Visitors to the public site each get their own separate, empty journal. Use *Settings & data → Export full backup* regularly.
+## Spending
+- **Transactions:** amount, category, date and a note. Pro input adds subcategory, merchant, payment method, account, tags, need/want, "repeats" and "leave out of totals".
+- **Spending dashboard** (month by month):
+  - spending through the month vs last month and your budget pace
+  - projected month-end and a safe amount to spend per day
+  - categories vs your 3-month average
+  - income vs spending and savings rate
+  - needs · wants · saved compared with the 50/30/20 guideline
+  - spending by weekday and top merchants
+- **Calendar:** daily spending heat-map, income, and bills coming up.
+- **Budgets:** a monthly total plus optional per-category limits, an even-pace marker, and "fill from my averages".
+- **Bills & subscriptions:** recurring items (weekly, monthly, quarterly or yearly) are added automatically on their due date or kept as reminders. The page shows fixed costs per month and subscriptions per year.
+- **Categories:** 15 editable categories, each marked need or want, with optional subcategories.
+- **Bank CSV import:** handles signed amounts or separate money-out/money-in columns and European number formats. Duplicates are skipped, and merchants you've categorised before are recognised. Everything can be exported back to CSV.
 
-See [RESEARCH.md](RESEARCH.md) for the metrics, charts and design rationale.
+## Net worth
+Six simple account types (Cash, Savings, Trading capital, Investments, Assets, Debt), or detailed categories in Pro mode. The rest of the net-worth side:
+- dated balance snapshots, plus accounts with a fixed yield (APY) that grow daily
+- holdings with live prices
+- custody, purpose and liquidity analytics
+- FI planning that uses your real spending history
+
+## Simple or Pro input
+Chosen on first launch and changeable in Settings. The mode only changes **how much you fill in**. Every page, chart and report is available in both, and switching never deletes anything.
 
 ## Currencies
-Each account (net worth and trading) and each cash-flow month has its own currency. Values are stored as entered and converted into the **display currency** (Settings) for totals, charts and dashboards. Conversion uses ECB reference rates via Frankfurter, with Coinbase as fallback. Past snapshots use the rate of their date, so FX moves show up in your history. Rates are cached locally, and USDT is treated as USD.
+Every account, transaction and bill keeps its own currency. Totals are converted to the display currency using ECB reference rates (via Frankfurter, with Coinbase as fallback), at the rate of each transaction's or snapshot's date.
+
+## The old trading-journal version
+The full previous app (trading journal, daily journal and net worth) is preserved on the branch [`archive/trading-journal-v0.7.1`](https://github.com/kubnev/Trading-journal/tree/archive/trading-journal-v0.7.1). Use *Code → Download ZIP* on that branch to get it. Data from that version is converted automatically:
+- Net-worth accounts that were linked to a trading account become normal accounts holding their value at the time of conversion.
+- Monthly cash-flow totals become transactions.
+- Old trades and journal entries stay untouched in the browser database. They're not shown, and "Delete all data" removes them.
 
 ## Live prices for holdings
 Net-worth accounts can track individual holdings (quantity × price). **Update prices** fetches prices directly from the browser:
@@ -65,18 +79,19 @@ There is no build step: `index.html` at the root is the site.
 
 ## Structure
 ```
-index.html            app shell
-css/app.css           styles (dark/light themes)
-vendor/chart.umd.min.js  Chart.js 4 (MIT), vendored — no CDN
-js/store.js           IndexedDB persistence, backup/restore
-js/ui.js              formatting, templating, modal, toasts
-js/charts.js          chart presets & theme
-js/main.js            router, navigation, notices
-js/version.js         app version, changelog, update check
-scripts/version.mjs   regenerates version.json
-js/demo.js            demo data generator
-js/journal/views.js   daily journal, history, insights
-js/help.js            help drawer + guided tour
-js/trading/           calc.js (metrics), positions.js (open book), trades.js, reports…
-js/networth/          calc.js (all metrics), prices.js (live prices) + views
+index.html               app shell (Content-Security-Policy, no inline scripts)
+css/app.css              styles (light/dark tokens)
+vendor/                  Chart.js 4 (MIT) and Source Serif 4 (OFL), vendored — no CDN
+js/main.js               router, navigation, quick add, notices
+js/store.js              IndexedDB persistence, backup validation, wipe
+js/migrate.js            one-time conversion from the trading-journal version
+js/backup.js, crypto.js  password-encrypted backups (AES-256-GCM, PBKDF2)
+js/fx.js                 currencies & exchange rates
+js/spend/                categories, calculations, transaction form, views, CSV
+js/networth/             calculations, live prices, views
+js/home.js               overview page
+js/mode.js               Simple / Pro input mode
+js/tips.js               "?" help on every field
+js/help.js               help drawer + guided tour
+js/demo.js               demo data
 ```

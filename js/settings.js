@@ -1,7 +1,7 @@
 import * as store from './store.js';
 import { html, raw, esc, toast, download, readFileText, confirmDlg, modal, formData, today } from './ui.js';
 import { loadDemo, removeDemo, hasDemo } from './demo.js';
-import { exportTradesCSV, importTradesCSVDialog } from './trading/csv.js';
+import { exportTxnsCSV, importTxnsDialog } from './spend/csv.js';
 import { refresh, go } from './main.js';
 import { APP_VERSION, CHANGELOG, checkForUpdate, applyUpdate } from './version.js';
 import { exportBackupFlow, importBackupFlow } from './backup.js';
@@ -31,7 +31,7 @@ export default async function settingsView(el) {
                 ${[['', 'Browser default'], ['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['de-DE', 'German'], ['bg-BG', 'Bulgarian'], ['fr-FR', 'French']].map(([v, l]) => html`<option value="${v}" ${(s.locale || '') === v ? raw('selected') : ''}>${l}</option>`)}
               </select>
             </label>
-            <label class="field">Profit / loss colours
+            <label class="field">Positive / negative colours
               <select name="pnlColors">
                 <option value="greenred" ${s.pnlColors === 'greenred' ? raw('selected') : ''}>Green / red</option>
                 <option value="blueorange" ${s.pnlColors === 'blueorange' ? raw('selected') : ''}>Blue / orange (colour-blind friendly)</option>
@@ -46,15 +46,10 @@ export default async function settingsView(el) {
         </form>
 
         <form class="card" id="lists">
-          <div class="card-head"><h2>Lists — tags, habits</h2><span class="hint">One per line</span></div>
-          <div class="form-grid">
-            <label class="field">Mistakes<textarea name="mistakes" rows="8">${s.tagLists.mistakes.join('\n')}</textarea></label>
-            <label class="field">Emotions<textarea name="emotions" rows="8">${s.tagLists.emotions.join('\n')}</textarea></label>
-            <label class="field">Tags / conditions<textarea name="tags" rows="8">${s.tagLists.tags.join('\n')}</textarea></label>
-            <label class="field">Daily habits<textarea name="habits" rows="8">${(s.habits || []).join('\n')}</textarea></label>
-            <label class="field">Journal day tags<textarea name="dayTags" rows="8">${(s.dayTags || []).join('\n')}</textarea></label>
-          </div>
-          <div class="row mt"><span class="spacer"></span><button class="btn primary">Save lists</button></div>
+          <div class="card-head"><h2>Payment methods</h2><span class="hint">One per line</span></div>
+          <p class="small muted" style="margin-top:0">Offered on the Pro transaction form. Spending categories are edited on <a href="#/spending/categories">Spending → Categories</a>.</p>
+          <label class="field">Payment methods<textarea name="payMethods" rows="7">${(s.payMethods || []).join('\n')}</textarea></label>
+          <div class="row mt"><span class="spacer"></span><button class="btn primary">Save</button></div>
         </form>
       </div>
 
@@ -70,25 +65,24 @@ export default async function settingsView(el) {
             <label class="btn">Restore from backup…<input type="file" accept=".json,application/json" data-act="import" hidden></label>
           </div>
           <p class="small muted mt" style="margin-bottom:0">
-            ${counts.trades} trades · ${counts.tAccounts} trading accounts · ${counts.days} journal days · ${counts.setups} setups ·
-            ${counts.nwAccounts} net-worth accounts · ${counts.nwSnapshots} snapshots · ${counts.nwCashflow} cash-flow months
+            ${counts.txns} transactions · ${counts.recurring} bills & subscriptions · ${counts.nwAccounts} accounts · ${counts.nwSnapshots} balance snapshots
             ${est ? html`<br>Using ${(est.usage / 1048576).toFixed(1)} MB of local storage.` : ''}
           </p>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Trades CSV</h2></div>
-          <p class="small muted">Import round-trip trades from any broker export or spreadsheet — you map the columns. Export gives one row per trade with all computed metrics. <b>CSV files are not encrypted</b> — use a backup for safekeeping.</p>
+          <div class="card-head"><h2>Transactions CSV</h2></div>
+          <p class="small muted">Import a statement export from your bank or card — you map the columns, duplicates are skipped and known merchants are categorised from your history. <b>CSV files are not encrypted</b> — use a backup for safekeeping.</p>
           <div class="row">
-            <button class="btn" data-act="csv-import">Import trades from CSV…</button>
-            <button class="btn" data-act="csv-export">Export trades CSV</button>
+            <button class="btn" data-act="csv-import">Import bank CSV…</button>
+            <button class="btn" data-act="csv-export">Export transactions CSV</button>
           </div>
         </div>
 
         <div class="card">
           <div class="card-head"><h2>Demo data</h2></div>
           ${hasDemo() ? html`<p class="small muted">Demo data is loaded. Remove it before you start logging real entries (your own entries are kept).</p><button class="btn" data-act="demo-remove">Remove demo data</button>`
-                      : html`<p class="small muted">Load sample trades, journal days, accounts and net-worth history to explore every chart.</p><button class="btn" data-act="demo-load">Load demo data</button>`}
+                      : html`<p class="small muted">Load six months of sample spending, bills and budgets plus a net-worth history to explore every chart.</p><button class="btn" data-act="demo-load">Load demo data</button>`}
         </div>
 
         <div class="card">
@@ -112,7 +106,7 @@ export default async function settingsView(el) {
 
         <div class="card">
           <div class="card-head"><h2>Danger zone</h2></div>
-          <p class="small muted">Wipe every trade, journal entry, screenshot, account, snapshot and setting (including your Finnhub key) from this browser. Export a backup first if you want to keep anything.</p>
+          <p class="small muted">Wipe every transaction, bill, account, balance snapshot and setting (including your Finnhub key) from this browser — plus any data left from the old trading-journal version. Export a backup first if you want to keep anything.</p>
           <button class="btn danger" data-act="wipe">Delete all data…</button>
         </div>
       </div>
@@ -132,10 +126,9 @@ export default async function settingsView(el) {
   };
   el.querySelector('#lists').onsubmit = async e => {
     e.preventDefault();
-    const f = formData(e.target);
-    const lines = v => [...new Set(v.split('\n').map(x => x.trim()).filter(Boolean))];
-    await store.saveSettings({ tagLists: { mistakes: lines(f.mistakes), emotions: lines(f.emotions), tags: lines(f.tags) }, habits: lines(f.habits), dayTags: lines(f.dayTags) });
-    toast('Lists saved');
+    const lines = v => [...new Set(v.split('\n').map(x => x.trim()).filter(Boolean))].slice(0, 40);
+    await store.saveSettings({ payMethods: lines(formData(e.target).payMethods) });
+    toast('Payment methods saved');
   };
 
   el.addEventListener('click', async e => {
@@ -160,9 +153,9 @@ export default async function settingsView(el) {
     } else if (a === 'export' || a === 'export-lite') {
       if (await exportBackupFlow({ includeImages: a === 'export' })) refresh();
     } else if (a === 'csv-export') {
-      exportTradesCSV();
+      exportTxnsCSV();
     } else if (a === 'csv-import') {
-      if (await importTradesCSVDialog()) refresh();
+      if (await importTxnsDialog()) refresh();
     } else if (a === 'demo-load') {
       await loadDemo(); toast('Demo data loaded'); refresh();
     } else if (a === 'demo-remove') {
@@ -170,7 +163,7 @@ export default async function settingsView(el) {
     } else if (a === 'wipe') {
       const ok = await modal({
         title: 'Delete all data?',
-        body: `<p>This permanently deletes every trade, journal entry, screenshot, account, snapshot and setting stored in this browser. It cannot be undone.</p><label class="field">Type <b>DELETE</b> to confirm<input name="c" autocomplete="off"></label>`,
+        body: `<p>This permanently deletes every transaction, bill, account, snapshot and setting stored in this browser. It cannot be undone.</p><label class="field">Type <b>DELETE</b> to confirm<input name="c" autocomplete="off"></label>`,
         actions: [{ label: 'Cancel' }, { label: 'Delete everything', kind: 'danger', value: w => (w.querySelector('[name=c]').value === 'DELETE' ? true : (toast('Type DELETE to confirm', 'error'), false)) }],
       });
       if (ok === true) { await store.wipeEverything(); toast('All data deleted'); refresh(); }

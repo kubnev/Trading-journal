@@ -2,18 +2,17 @@
 // Collections are loaded into memory at startup; writes go through to IDB.
 
 const DB_NAME = 'ledgerline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const COLLECTIONS = [
-  'trades',        // trading: individual trades (with executions)
-  'tAccounts',     // trading: brokerage / prop accounts
-  'tTransfers',    // trading: deposits & withdrawals per account
-  'setups',        // trading: playbook setups
-  'days',          // trading: daily journal entries (keyed by date)
   'nwAccounts',    // net worth: assets & liabilities
   'nwSnapshots',   // net worth: dated balance snapshots
-  'nwCashflow',    // net worth: monthly income / expenses
+  'txns',          // spending: expenses & income, one record per transaction
+  'recurring',     // spending: bills & subscriptions that repeat
+  'nwCashflow',    // legacy monthly totals — converted to transactions on load, kept so old backups import
 ];
+// Stores from the old trading-journal version. Never deleted (your data stays in the browser), just not used.
+export const LEGACY_STORES = ['trades', 'tAccounts', 'tTransfers', 'setups', 'days'];
 const BLOB_STORE = 'images';
 const META_STORE = 'meta';
 
@@ -24,23 +23,19 @@ export const DEFAULT_SETTINGS = {
   pnlColors: 'greenred',          // or 'blueorange' (colour-vision friendly)
   priceApi: { finnhubKey: '', lastUpdate: null },
   lastBackupAt: null,
-  mode: 'simple',                 // 'simple' | 'pro' — one switch for the whole app
-  tagLists: {
-    tags: ['A+ setup', 'Trend day', 'Range day', 'News', 'Gap', 'High volatility', 'Low volume', 'Earnings'],
-    mistakes: ['Entered early', 'Chased entry', 'Moved stop', 'No stop', 'Oversized', 'Cut winner early', 'Held loser', 'Revenge trade', 'FOMO', 'Overtraded', 'Ignored plan', 'Averaged down'],
-    emotions: ['Calm', 'Confident', 'Focused', 'Anxious', 'Fearful', 'Greedy', 'Frustrated', 'Impatient', 'Bored', 'Euphoric', 'Tired'],
-  },
-  habits: ['Exercise', 'Reading', 'Meditation', 'Reviewed open positions', 'Followed trading rules', 'No impulse spending'],
-  dayTags: ['Travel', 'Sick', 'Family', 'Busy work day', 'Holiday', 'High stress'],
+  mode: 'simple',                 // 'simple' | 'pro' — how much detail you enter
+  categories: null,               // null → built-in list (spend/categories.js); otherwise your edited list
+  budgets: { total: 0, byCat: {} },   // monthly limits in the display currency
+  payMethods: ['Debit card', 'Credit card', 'Cash', 'Bank transfer', 'Apple / Google Pay', 'Revolut', 'PayPal'],
   tour: { done: false },
   plan: {
-    annualExpenses: 0,            // 0 → derived from cash-flow history
+    annualExpenses: 0,            // 0 → derived from your spending history
     withdrawalRate: 4,
     expectedReturn: 6,            // nominal % / yr
     inflation: 2.5,
     currentAge: 30,
     retirementAge: 60,
-    monthlyContribution: 0,       // 0 → derived from cash-flow history
+    monthlyContribution: 0,       // 0 → average monthly income − spending
     targetAllocation: {},         // category → %
     emergencyMonths: 6,
   },
@@ -87,6 +82,7 @@ export async function init() {
   // migrate the old per-section switches to the single global one
   if (!saved.mode && (saved.tradingMode || saved.networthMode)) saved.mode = saved.tradingMode === 'pro' || saved.networthMode === 'pro' ? 'pro' : 'simple';
   delete saved.tradingMode; delete saved.networthMode;
+  for (const k of ['tagLists', 'habits', 'dayTags']) delete saved[k];   // trading/journal settings from older versions
   settings = merge(structuredClone(DEFAULT_SETTINGS), saved);
   // Ask the browser not to evict our data under storage pressure.
   try { if (navigator.storage?.persist) await navigator.storage.persist(); } catch {}
@@ -186,6 +182,13 @@ async function allImages() {
   return req(tx.objectStore(BLOB_STORE).getAll());
 }
 
+// Read a store left over from an older version (for one-time migrations)
+export async function readLegacy(name) {
+  if (!db.objectStoreNames.contains(name)) return [];
+  const tx = db.transaction(name, 'readonly');
+  return req(tx.objectStore(name).getAll());
+}
+
 // ---------- backup ----------
 const blobToDataURL = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
 // decoded by hand (no fetch), so the page never needs to load anything from a URL in a backup
@@ -237,9 +240,9 @@ function cleanSettings(s) {
   if (!['greenred', 'blueorange'].includes(out.pnlColors)) delete out.pnlColors;
   if (!['simple', 'pro'].includes(out.mode)) delete out.mode;
   const strList = v => Array.isArray(v) && v.every(x => typeof x === 'string');
-  for (const k of ['habits', 'dayTags']) if (k in out && !strList(out[k])) delete out[k];
-  if ('tagLists' in out) { if (!isObj(out.tagLists)) delete out.tagLists; else for (const k of Object.keys(out.tagLists)) if (!strList(out.tagLists[k])) delete out.tagLists[k]; }
-  for (const k of ['fx', 'plan', 'tour', 'priceApi']) if (k in out && !isObj(out[k])) delete out[k];
+  if ('payMethods' in out && !strList(out.payMethods)) delete out.payMethods;
+  if ('categories' in out && out.categories !== null && !(Array.isArray(out.categories) && out.categories.every(c => isObj(c) && typeof c.id === 'string' && typeof c.name === 'string' && (c.subs == null || strList(c.subs))))) delete out.categories;
+  for (const k of ['fx', 'plan', 'tour', 'priceApi', 'budgets']) if (k in out && !isObj(out[k])) delete out[k];
   return out;
 }
 
@@ -280,6 +283,8 @@ export async function clearAll({ keepSettings = false } = {}) {
 // "Delete all data": every record, screenshot and setting, plus this app's small browser keys
 export async function wipeEverything() {
   await clearAll();
+  const legacy = LEGACY_STORES.filter(n => db.objectStoreNames.contains(n));
+  if (legacy.length) { const tx = db.transaction(legacy, 'readwrite'); for (const n of legacy) tx.objectStore(n).clear(); await txDone(tx); }
   try { for (const k of Object.keys(localStorage)) if (k.startsWith('tj.')) localStorage.removeItem(k); } catch {}
 }
 

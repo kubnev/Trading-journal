@@ -8,8 +8,8 @@ const SIMPLE = {
   lead: 'Quick, plain-language input.',
   points: [
     'Accounts are one of six types: Cash, Savings, Trading capital, Investments, Assets, Debt',
-    'Trades: symbol, entry, exit, stop and a short thesis',
-    'Daily journal: mood, energy, sleep, habits and a short reflection',
+    'Expenses: amount, category, date and a short note — a few seconds each',
+    'Bills & subscriptions: name, amount, how often',
     'Everything else (liquidity, custody, purpose…) is worked out for you',
   ],
 };
@@ -19,8 +19,8 @@ const PRO = {
   points: [
     '11 asset and 8 debt categories (retirement, real estate, vehicles, mortgage…)',
     'Set custody, purpose, liquidity and FI status per account',
-    'Trades: catalyst, regime, conviction, MAE/MFE, grade, mistakes, screenshots',
-    'Journal: focus, discipline, market bias, watchlist, day tags',
+    'Expenses: subcategory, merchant, payment method, account, tags, need/want, repeats',
+    'Category subcategories and end dates / payment details on bills',
   ],
 };
 const card = (m, id, current) => html`<button type="button" class="mode-card ${current === id ? 'on' : ''}" data-pick="${id}">
@@ -34,7 +34,7 @@ export const modeName = () => (store.getSettings().mode === 'pro' ? 'Pro' : 'Sim
 export function chooserView(el, onDone) {
   el.innerHTML = String(html`<div class="mode-choose">
     <h1>How do you want to enter your data?</h1>
-    <p class="muted">Both show every chart, report and analysis. The difference is how much detail you fill in when you add an account, a trade or a journal entry. You can change this later in Settings.</p>
+    <p class="muted">Both show every chart, report and analysis. The difference is how much detail you fill in when you add an account or an expense. You can change this later in Settings.</p>
     <div class="mode-cards">${card(SIMPLE, 'simple')}${card(PRO, 'pro')}</div>
     <p class="small muted">Not sure? Pick Simple — you can upgrade any time without losing anything.</p></div>`);
   el.querySelectorAll('[data-pick]').forEach(b => b.onclick = async () => {
@@ -58,10 +58,10 @@ export async function switchMode(to) {
   const body = to === 'pro'
     ? `<p>Pro splits your accounts into finer categories — e.g. <b>Investments</b> becomes taxable investments, retirement, crypto or business; <b>Assets</b> becomes real estate, vehicles or other assets.</p>
        ${nAcc ? `<p>Your ${nAcc} account${nAcc === 1 ? ' is' : 's are'} placed in the closest Pro category automatically. <b>Review them on Accounts</b> and adjust the category, custody, purpose and liquidity where it matters — your analytics get more accurate.</p>` : ''}
-       <p class="small muted">Trade and journal forms also get their extra fields.</p>`
+       <p class="small muted">The expense form also gets subcategory, merchant, payment method, tags and more.</p>`
     : `<p>Simple groups everything into six types: Cash, Savings, Trading capital, Investments, Assets and Debt.</p>
        ${nAcc ? `<p><b>Nothing is deleted or reset.</b> Each detailed category falls into one of the six types, and the details you set (category, custody, purpose…) are kept — they come back if you switch to Pro again.</p>` : ''}
-       <p class="small muted">Extra Pro fields are hidden from the forms; values you already entered stay on your trades and journal.</p>`;
+       <p class="small muted">Extra Pro fields are hidden from the forms; values you already entered stay on your transactions.</p>`;
   const ok = await modal({ title: `Switch to ${to === 'pro' ? 'Pro' : 'Simple'} input?`, body, actions: [{ label: 'Cancel' }, { label: `Switch to ${to === 'pro' ? 'Pro' : 'Simple'}`, kind: 'primary', value: () => true }] });
   if (ok !== true) return false;
   await store.saveSettings({ mode: to, modeChosen: true, reviewAccounts: to === 'pro' && nAcc > 0 });

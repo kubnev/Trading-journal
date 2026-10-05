@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '0.7.1';
+export const APP_VERSION = '1.0.0';
 
 export const CHANGELOG = [
+  ['1.0.0', 'Ledgerline: a finance-only app — spending and net worth. New Spending section: quick add (button or N), month dashboard with pace, projection, safe-to-spend, categories vs average, income vs spending, needs/wants/saved (50/30/20), calendar, budgets, bills & subscriptions (auto-added, yearly cost), editable categories, bank CSV import/export. The trading journal and daily journal moved to the archive branch; linked trading accounts became normal accounts and old monthly cash-flow totals became transactions.'],
   ['0.7.1', 'Edit an account to change its balance: the form shows today\'s value and saving a new one records it for today, keeping earlier history.'],
   ['0.7.0', 'Simple / Pro is now an input mode, chosen on first launch: every page, chart and report is available in both — the difference is how much you fill in. Simple accounts are one of six plain types (Cash, Savings, Trading capital, Investments, Assets, Debt) with only the fields that type needs; Pro keeps the detailed categories. Switching modes never deletes anything (Settings → Input mode). Fixed hidden form fields sometimes still showing.'],
   ['0.6.2', 'Purpose / bucket is now a normal dropdown like the other fields (Auto, the standard buckets, any you created, or “Other” to type your own).'],

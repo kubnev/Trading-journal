@@ -50,20 +50,20 @@ export const toDisplay = (amount, from, date) => conv(amount, from, displayCcy()
 // every currency present in the data except the display one (for the rates table)
 export function otherCurrencies() {
   const s = new Set();
-  for (const c of ['nwAccounts', 'tAccounts', 'nwCashflow']) for (const x of store.all(c)) if (x.currency) s.add(x.currency === 'USDT' ? 'USD' : x.currency);
+  for (const c of ['nwAccounts', 'txns', 'recurring']) for (const x of store.all(c)) if (x.currency) s.add(x.currency === 'USDT' ? 'USD' : x.currency);
   s.delete(displayCcy() === 'USDT' ? 'USD' : displayCcy());
   return [...s];
 }
 // currencies actually used in the data (plus display)
 export function currenciesInUse() {
   const s = new Set([displayCcy()]);
-  for (const c of ['nwAccounts', 'tAccounts', 'nwCashflow']) for (const x of store.all(c)) if (x.currency) s.add(x.currency);
+  for (const c of ['nwAccounts', 'txns', 'recurring']) for (const x of store.all(c)) if (x.currency) s.add(x.currency);
   if (store.getSettings().plan?.currency) s.add(store.getSettings().plan.currency);
   if (s.has('BGN')) { s.delete('BGN'); s.add('EUR'); }
   return [...s].filter(c => !USD_LIKE.has(c));
 }
 const earliestDate = () => {
-  const ds = [...store.all('nwSnapshots').map(s => s.date), ...store.all('nwCashflow').map(c => c.id + '-01'), ...store.all('trades').flatMap(t => (t.executions || []).map(e => (e.datetime || '').slice(0, 10)))].filter(Boolean).sort();
+  const ds = [...store.all('nwSnapshots').map(s => s.date), ...store.all('txns').map(t => t.date)].filter(Boolean).sort();
   return ds[0] || null;
 };
 
@@ -139,7 +139,7 @@ export const ccySelect = (name, cur) => `<select name="${name}">${CURRENCIES.map
 // One-time: tag existing records with the currency they were entered in (the display currency at the time)
 export async function migrateCurrencies() {
   const cur = displayCcy();
-  for (const c of ['nwAccounts', 'tAccounts', 'nwCashflow']) {
+  for (const c of ['nwAccounts', 'txns', 'recurring']) {
     const todo = store.all(c).filter(x => !x.currency);
     if (todo.length) await store.putMany(c, todo.map(x => ({ ...x, currency: cur })));
   }

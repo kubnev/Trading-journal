@@ -4,12 +4,38 @@ import { html, raw, esc } from './ui.js';
 
 const GUIDE = [
   { id: 'overview', title: 'Overview', match: p => p === '/', body: `
-    <p>Your daily home page. It shows net worth, open positions, this month's trading result and whether today's journal is written.</p>
-    <ul><li><b>Today</b> checklist: journal check-in, review open positions, update balances this month, weekly backup.</li>
+    <p>Your daily home page: what you've spent this month, budget left and a safe amount per day, savings, net worth and the bills coming up.</p>
+    <ul><li><b>+ Add expense</b> (or press <kbd>N</kbd> anywhere) logs a transaction in a few seconds.</li>
+    <li>The <b>Today</b> list nudges the habits that keep the numbers accurate: log spending, update balances monthly, back up weekly.</li>
     <li><b>Earned today from yields</b> ticks up live if you have accounts with a fixed yield (APY).</li></ul>` },
+  { id: 'spending', title: 'Spending', match: p => p === '/spending', body: `
+    <p>Month-by-month view of where your money goes. Use ← → to move between months.</p>
+    <ul><li><b>Spending through the month</b> — cumulative spending vs last month and your budget pace. Above the budget line = spending too fast.</li>
+    <li><b>Projected month-end</b> = spent so far + your average daily spend for the remaining days + bills still due.</li>
+    <li><b>Safe to spend per day</b> = budget left, minus bills still due this month, divided by the days left.</li>
+    <li><b>Needs · wants · saved</b> compares you with the 50/30/20 guideline (50% needs, 30% wants, 20% saved). Each category is a need or a want — change it on Categories.</li>
+    <li><b>Categories</b> table compares this month with your 3-month average; click a row to see its transactions.</li></ul>` },
+  { id: 'transactions', title: 'Transactions', match: p => p === '/spending/transactions', body: `
+    <p>Every expense and income, grouped by day. Filter by type, category or text; switch to <b>All time</b> to search everything.</p>
+    <ul><li>Click a transaction to edit or delete it.</li>
+    <li><b>Import CSV</b> takes your bank's statement export: map the columns once, duplicates are skipped and merchants you've categorised before are recognised.</li>
+    <li>Only log <i>spending</i> and <i>income</i>. Moving money between your own accounts (e.g. into savings) isn't spending — update it on Net worth instead.</li>
+    <li>Pro input adds subcategory, merchant, payment method, account, tags, need/want and "repeats".</li></ul>` },
+  { id: 'calendar', title: 'Calendar', match: p => p === '/spending/calendar', body: `<p>Each day shows what you spent (darker = more), income in green and 🔁 bills that are coming up. Click a day to see its transactions or add one on that date. "—" marks a no-spend day.</p>` },
+  { id: 'budgets', title: 'Budgets', match: p => p === '/spending/budgets', body: `
+    <p>Set a total monthly budget and, optionally, limits for the categories you want to watch (eating out, shopping…).</p>
+    <ul><li>The marker on each bar is where you'd be if you spent evenly through the month — ahead of it means slow down.</li>
+    <li><b>Fill from my averages</b> pre-fills each limit with your recent average, so you start from reality.</li>
+    <li>Leave the total blank to use the sum of the category limits.</li></ul>` },
+  { id: 'recurring', title: 'Bills & subscriptions', match: p => p === '/spending/recurring', body: `
+    <p>Everything that repeats: rent, utilities, phone, gym, streaming, insurance — and income like your salary.</p>
+    <ul><li>With <b>add automatically</b> on, each payment is logged on its due date when you open the app. Off = a reminder you confirm with <b>Mark paid</b>.</li>
+    <li><b>Fixed costs / month</b> and <b>Subscriptions / year</b> make forgotten subscriptions visible — review them once a year.</li>
+    <li>Upcoming bills also show on the Overview, the Calendar and in the month-end projection.</li></ul>` },
+  { id: 'categories', title: 'Categories', match: p => p === '/spending/categories', body: `<p>Rename, add or remove spending categories and choose whether each is a <b>need</b> or a <b>want</b> (drives the 50/30/20 view). Pro input adds subcategories. 10–20 categories is the sweet spot — enough detail to act on, few enough to log quickly.</p>` },
   { id: 'nw', title: 'Net worth', match: p => p === '/networth', body: `
     <p>Net worth = everything you own − everything you owe. It's built from <b>snapshots</b>: the value of each account on a date. Update monthly (or whenever you like); accounts you don't touch carry their last value forward.</p>
-    <ul><li><b>Change per period</b> (Pro) splits each change into money you saved (from Cash flow) and market moves.</li>
+    <ul><li><b>Change per period</b> splits each change into money you saved (income − spending from the Spending section) and market moves.</li>
     <li><b>Liquid net worth</b> counts only what you could reach in days, minus all debts.</li>
     <li>The range buttons (1Y/3Y/5Y) zoom the charts.</li></ul>` },
   { id: 'accounts', title: 'Accounts & holdings', match: p => p === '/networth/accounts', body: `
@@ -27,33 +53,9 @@ const GUIDE = [
     <li><b>Liquidity ladder</b> — cash → liquid investments → locked/retirement → illiquid.</li>
     <li><b>Effective positions</b> — 1 ÷ Herfindahl index: how diversified your assets really are.</li>
     <li><b>Balance-sheet health</b> — planner rules of thumb (emergency fund, savings rate, debt-to-asset, concentration…). Guidelines, not laws.</li></ul>` },
-  { id: 'cashflow', title: 'Cash flow', match: p => p === '/networth/cashflow', body: `<p>Log monthly income and expenses. This drives savings rate, emergency-fund months, the FI number and the savings-vs-market split. Money moved into investments is savings, not an expense.</p>` },
   { id: 'plan', title: 'FI planning', match: p => p === '/networth/plan', body: `<p><b>FI number</b> = annual expenses ÷ withdrawal rate (4% → 25×). <b>Coast FI</b> = what you need invested today to reach the FI number by your target age without adding more. Projections use real (after-inflation) returns. Target allocation shows drift and how much to move to rebalance.</p>` },
-  { id: 'journal', title: 'Daily journal', match: p => p === '/journal', body: `
-    <p>A two-minute daily check-in: mood, energy, sleep, intention and habits in the morning; a short reflection and lesson in the evening. Pro adds focus, discipline, a markets section, gratitude and tags.</p>
-    <ul><li><b>Open positions check-in</b> — appears when you hold swing positions. Notes, new stops and prices go straight into each trade's timeline.</li>
-    <li>Use ← → or the date picker to write about other days.</li></ul>` },
-  { id: 'history', title: 'Journal history', match: p => p === '/journal/history', body: `<p>Month calendar of your entries (mood emoji) and closed-trade results. Click any day to open it. Pro shows a 12-month consistency map.</p>` },
-  { id: 'insights', title: 'Journal insights', match: p => p === '/journal/insights', body: `<p>Streaks, mood/energy trends, sleep, habit completion and how your state lines up with trading results. Small samples are noisy — use it as a prompt for reflection.</p>` },
-  { id: 'positions', title: 'Open positions', match: p => p === '/trading/positions', body: `
-    <ul><li><b>↻ Refresh prices</b> marks crypto and US stocks to market; other assets via <b>Update</b>.</li>
-    <li><b>R now</b> = unrealised P&L ÷ initial risk. <b>Portfolio heat</b> = what you'd lose if every current stop is hit — many swing traders keep it under ~6% of capital.</li>
-    <li><b>Update</b> moves your stop / adds a note. <b>Partial</b> takes profit on part of the position (25/33/50/75% presets, optional stop to breakeven); <b>Close</b> exits the rest. Each exit keeps its own P&L and R.</li></ul>` },
-  { id: 'trade', title: 'Logging a swing trade', match: p => p.startsWith('/trading/new') || p.includes('/edit'), body: `
-    <ul><li>Write the <b>thesis</b> before you enter: setup, catalyst, and what would prove you wrong.</li>
-    <li>Leave the exit empty while the trade is open. For partial take-profits use <b>Take partial profit</b> on the trade page, or "separate entries & exits" in the form — editing the size never wipes out an earlier partial.</li>
-    <li><b>Initial stop</b> defines 1R; <b>current stop</b> is where it is now (trailed). Risk is shown as % of your trading capital.</li>
-    <li>After the exit, pick an <b>exit reason</b> and grade the <i>process</i>, not the outcome.</li></ul>` },
-  { id: 'log', title: 'Trade log & trade page', match: p => p.startsWith('/trading/trade'), body: `<p>Every trade with filters and sorting. The trade page tells the whole story: thesis, plan, executions, a timeline of your updates, and the review.</p>` },
-  { id: 'perf', title: 'Performance', match: p => p === '/trading', body: `
-    <ul><li><b>Avg R</b> and <b>profit factor</b> tell you if there's an edge; win rate alone doesn't.</li>
-    <li><b>R vs days held</b> (Pro) shows which holding periods work for you.</li>
-    <li>Filters at the top apply to everything on the page.</li></ul>` },
-  { id: 'reports', title: 'Reports', match: p => p === '/trading/reports', body: `<p>Slices of your results: timing (holding period, month), setups/catalysts/sectors/regime/conviction, risk (R distribution, MAE/MFE, exit reasons, planned vs realised R) and psychology (mistakes, emotions, grades, plan adherence).</p>` },
-  { id: 'playbook', title: 'Playbook', match: p => p === '/trading/playbook', body: `<p>Define each setup with a thesis, entry trigger, stop and exit rules, plus a checklist you tick on every trade. Stats per setup show which ones deserve more size.</p>` },
-  { id: 'taccounts', title: 'Trading accounts', match: p => p === '/trading/accounts', body: `<p>Starting balance plus deposits/withdrawals gives trading capital, which is used for risk %, heat and drawdown %. A net-worth account can optionally be linked to a trading account so its balance follows the journal.</p>` },
-  { id: 'settings', title: 'Settings & data', match: p => p === '/settings', body: `<ul><li><b>Backups</b> — your data lives only in this browser. Export a backup regularly (you'll be reminded weekly). Backups are encrypted with a password you choose — keep it somewhere safe, a lost password can't be recovered.</li><li><b>Delete all data</b> — the Danger zone wipes everything this app stored in this browser.</li><li><b>Price data</b> — optional Finnhub key for stock prices.</li><li><b>Lists</b> — your mistakes, emotions, tags, habits and journal tags.</li><li><b>Check for app update</b> — load the newest version.</li></ul>` },
-  { id: 'general', title: 'Simple / Pro, themes & shortcuts', match: () => false, body: `<ul><li><b>Simple / Pro input</b> (Settings → Input mode) decides how much you fill in when adding accounts, trades and journal entries. Every page and chart is the same in both, and switching never deletes anything.</li><li><b>Theme</b> — Light, Dark or Auto (follows your device).</li><li>Press <kbd>?</kbd> anywhere to open this help.</li><li>Everything is stored in this browser (IndexedDB). Nothing is uploaded.</li></ul>` },
+  { id: 'settings', title: 'Settings & data', match: p => p === '/settings', body: `<ul><li><b>Backups</b> — your data lives only in this browser. Export a backup regularly (you'll be reminded weekly). Backups are encrypted with a password you choose — keep it somewhere safe, a lost password can't be recovered.</li><li><b>Delete all data</b> — the Danger zone wipes everything this app stored in this browser.</li><li><b>Price data</b> — optional Finnhub key for stock prices.</li><li><b>Payment methods</b> — the list offered on the Pro expense form. <b>Transactions CSV</b> — import your bank statement or export everything.</li><li><b>Check for app update</b> — load the newest version.</li></ul>` },
+  { id: 'general', title: 'Simple / Pro, themes & shortcuts', match: () => false, body: `<ul><li><b>Simple / Pro input</b> (Settings → Input mode) decides how much you fill in when adding accounts and expenses. Every page and chart is the same in both, and switching never deletes anything.</li><li><b>Theme</b> — Light, Dark or Auto (follows your device).</li><li>Press <kbd>?</kbd> anywhere to open this help.</li><li>Everything is stored in this browser (IndexedDB). Nothing is uploaded.</li><li><b>N</b> — add an expense from any page.</li></ul>` },
 ];
 
 let drawer = null;
@@ -82,16 +84,16 @@ export function closeHelp() { drawer?.remove(); drawer = null; document.removeEv
 
 // ---------- tour ----------
 const STEPS = [
-  { title: 'Welcome', text: 'This app combines three things: your <b>net worth</b>, a <b>daily journal</b>, and a <b>swing-trading</b> log. Here is where everything lives.' },
-  { sel: '[data-tour=mode]', title: 'Simple or Pro input', text: 'Shows which input mode you chose. Simple = fewer, plain-language fields; Pro = detailed categories and fields. Every chart and report is available in both — change it in Settings.' },
-  { sel: '.nav a[href="#/"]', title: 'Overview', text: 'Your daily home: net worth, open positions, today\'s journal, and a short to-do list.' },
-  { sel: '.nav a[href="#/networth/accounts"]', title: 'Accounts & holdings', text: 'Add everything you own and owe. Set where it\'s held (bank, CEX, DeFi, wallet…), its purpose, a fixed yield that grows daily, or individual coins/stocks with live prices.' },
-  { sel: '.nav a[href="#/networth/update"]', title: 'Update balances', text: 'Once a month (or whenever), record balances. Each update becomes a point on your net-worth history.' },
-  { sel: '.nav a[href="#/journal"]', title: 'Daily journal', text: 'A two-minute check-in: mood, energy, sleep, intention, habits — and a quick check on each open position.' },
-  { sel: '.nav a[href="#/trading/positions"]', title: 'Open positions', text: 'Your live swing book: unrealised P&L, R now, distance to stop and target, and total portfolio heat.' },
-  { sel: '.nav a[href="#/trading/trades"]', title: 'Trade log', text: 'Log a trade with its thesis before you enter, update it while it runs, and review it when it closes.' },
-  { sel: '[data-tour=settings]', title: 'Back up your data', text: 'Everything lives only in this browser. Export a backup from Settings — you\'ll get a weekly reminder.' },
-  { sel: '[data-tour=help]', title: 'Help any time', text: 'Click <b>?</b> (or press the ? key) for help about the page you\'re on. That\'s it — enjoy!' },
+  { title: 'Welcome', text: 'Ledgerline tracks two things: <b>what you spend</b> and <b>what you\'re worth</b>. Here is where everything lives.' },
+  { sel: '[data-tour=add]', title: 'Add an expense', text: 'The fastest way in: amount, category, done. Works from every page — or just press <b>N</b>.' },
+  { sel: '.nav a[href="#/spending"]', title: 'Spending', text: 'Your month at a glance: spending vs last month and budget, categories, needs vs wants, income vs spending.' },
+  { sel: '.nav a[href="#/spending/calendar"]', title: 'Calendar', text: 'What you spent each day and which bills are coming up.' },
+  { sel: '.nav a[href="#/spending/budgets"]', title: 'Budgets', text: 'Set a monthly limit and get a safe amount to spend per day.' },
+  { sel: '.nav a[href="#/spending/recurring"]', title: 'Bills & subscriptions', text: 'Rent, bills, subscriptions and salary — added automatically on their due dates, with the yearly cost of every subscription.' },
+  { sel: '.nav a[href="#/networth/accounts"]', title: 'Accounts', text: 'Add your cash, savings, trading capital, investments, the things you own and any debts.' },
+  { sel: '.nav a[href="#/networth/update"]', title: 'Update balances', text: 'Once a month, record what each account is worth. Each update becomes a point on your net-worth history.' },
+  { sel: '[data-tour=settings]', title: 'Back up your data', text: 'Everything lives only in this browser. Export a password-protected backup from Settings — you\'ll get a weekly reminder.' },
+  { sel: '[data-tour=help]', title: 'Help any time', text: 'Click <b>?</b> (or press the ? key) for help about the page you\'re on. Every field also has a <b>?</b> you can hover or tap.' },
 ];
 
 let tourEl = null, step = 0;
@@ -149,6 +151,6 @@ export async function endTour() {
 // First visit ever: offer the tour once
 export function maybeStartTour() {
   const s = store.getSettings();
-  const empty = !store.all('trades').length && !store.all('nwAccounts').length && !store.all('days').length;
+  const empty = !store.all('txns').length && !store.all('nwAccounts').length;
   if (!s.tour?.done && empty) setTimeout(startTour, 600);
 }
