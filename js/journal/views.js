@@ -37,6 +37,19 @@ export function streaks() {
 const scale = (name, v, labels = MOODS) => html`<div class="seg rate" role="radiogroup" aria-label="${name}">${labels.map((m, i) => html`<button type="button" data-rate="${name}" data-v="${i + 1}" class="${+v === i + 1 ? 'on' : ''}" aria-label="${i + 1} of 5">${m}</button>`)}<input type="hidden" name="${name}" value="${v || ''}"></div>`;
 const NUMS = ['1', '2', '3', '4', '5'];
 
+// the 7 days up to `day`: mood per day, sleep and habits — so the side column is worth a glance
+function weekCard(day) {
+  const ds = Array.from({ length: 7 }, (_, i) => { const d = parseDay(day); d.setDate(d.getDate() - 6 + i); return dayKey(d); });
+  const es = ds.map(k => store.get('days', k));
+  const got = es.filter(Boolean);
+  const sleep = mean(got.map(e => +e.sleep).filter(x => x > 0)), mood = mean(got.map(e => +e.mood).filter(x => x > 0)), stress = mean(got.map(e => +e.stress).filter(x => x > 0));
+  const hab = habitList().map(h => ({ h, n: got.filter(e => e.habits?.[h]).length })).filter(x => x.n);
+  return html`<div class="card"><div class="card-head"><h2>Last 7 days</h2><span class="hint">${got.length}/7 checked in</span></div>
+    <div class="week-strip">${ds.map((k, i) => html`<a href="#/journal?day=${k}" class="${k === day ? 'on' : ''}" title="${fmtDate(k)}"><span class="small muted">${DOW[parseDay(k).getDay()].slice(0, 2)}</span><span class="wk-mood">${es[i]?.mood ? MOODS[es[i].mood - 1] : es[i] ? '✎' : '·'}</span></a>`)}</div>
+    <dl class="kv small mt"><dt>Average mood</dt><dd>${mood ? num(mood, 1) + ' / 5' : '—'}</dd><dt>Average stress</dt><dd>${stress ? num(stress, 1) + ' / 5' : '—'}</dd><dt>Average sleep</dt><dd>${sleep ? num(sleep, 1) + ' h' : '—'}</dd></dl>
+    ${hab.length ? html`<div class="small muted mt">Habits this week</div><div class="chips mt" style="gap:6px">${hab.map(x => html`<span class="tag">${x.h} ${x.n}×</span>`)}</div>` : ''}</div>`;
+}
+
 // ================= today / any day =================
 export async function journalDay(el) {
   const pro = !simpleMode();
@@ -77,7 +90,8 @@ export async function journalDay(el) {
         <div class="form-actions">${store.get('days', day) ? html`<button type="button" class="btn danger" data-del>Delete entry</button>` : ''}<button class="btn primary">Save journal</button></div>
       </form>
 
-      <div class="stack">
+      <div class="stack journal-side">
+        ${weekCard(day)}
         <div class="card"><div class="card-head"><h2>This day</h2></div>
           <dl class="kv">
             <dt>Spent</dt><dd>${dayTx.length ? money(spent) : '—'}</dd>

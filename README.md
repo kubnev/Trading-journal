@@ -3,7 +3,6 @@
 A private, local-first finance tracker that runs in the browser. Built for people without a steady salary (traders, freelancers): **no income to log** — you update your balances every so often and the app follows your money from those snapshots.
 
 - **Net worth** — every account (bank, savings, exchanges, brokers, wallets, property, debts) grouped by type, valued over time from balance snapshots, with allocation, custody and liquidity analytics.
-- **Moves** — plan transfers between your accounts (take profits, top up savings, pay down a card, rebalance); mark one done and both balances update.
 - **Interest** — what each yield account earns per day / month / year, interest earned since the last update and this year, what debts cost, and cash that earns nothing.
 - **Spending** — log expenses in seconds (button or the `N` key), optionally taking them off an account's balance; budgets, subscriptions & bills.
 - **Journal** — a two-minute daily check-in (mood, energy, stress, sleep, habits) with insights on how you feel vs what you spend.
@@ -19,7 +18,7 @@ Six simple account types (Cash, Savings, Trading capital, Investments, Assets, D
 - dated balance snapshots; accounts with an APY grow daily between updates (APY changes keep the old rate for the past)
 - Accounts & holdings grouped by type with totals; holdings with live prices
 - custody, purpose, liquidity and concentration analytics; balance-sheet checks (cash runway, debt-to-asset…)
-- target allocation with a 5/25 rebalancing band (drift beyond 5 points, or 25% of the target if smaller), feeding suggestions on Moves
+- target allocation with a 5/25 rebalancing band (drift beyond 5 points, or 25% of the target if smaller)
 
 ## Spending
 - **Expenses:** amount, category, date, note and optionally the account it was paid from — tick "take it off this account's balance" to lower that balance (reversed on edit or delete; on a credit card it adds to what you owe). Pro input adds subcategory, merchant, payment method, tags, need/want, "repeats" and "leave out of totals".
@@ -87,7 +86,7 @@ js/migrate.js            one-time conversion from the trading-journal version
 js/backup.js, crypto.js  password-encrypted backups (AES-256-GCM, PBKDF2)
 js/fx.js                 currencies & exchange rates
 js/spend/                categories, calculations, transaction form, views, CSV
-js/networth/             calculations, live prices, views, moves & interest, balance adjustments (ledger.js)
+js/networth/             calculations, live prices, views, interest page, balance adjustments (ledger.js)
 js/journal/              daily check-in, history, insights
 js/home.js               overview page
 js/mode.js               Simple / Pro input mode

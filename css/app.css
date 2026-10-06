@@ -156,8 +156,8 @@ kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 
 .chart.xs { height: 120px; }
 
 /* ---------- stats ---------- */
-.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 10px; }
-.stats.big { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stats.big { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; min-width: 0; box-shadow: var(--shadow); }
 .stat-label { font-size: 12px; color: var(--text-3); display: flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; line-height: 1.35; min-width: 0; }
 .stat-label .tag { margin: 0; }
@@ -527,10 +527,39 @@ details.fold > summary { cursor: pointer; font-family: var(--font-serif); font-w
 .type-chip b.neg { color: var(--neg-text); }
 [id^="grp-"] { scroll-margin-top: 70px; }
 .acct-row .deductf .hint { font-weight: 400; }
-.move-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; color: var(--text); text-decoration: none; padding: 2px 0; }
-.move-row:hover .ellipsis { color: var(--accent); }
-.first-snap { display: flex; flex-direction: column; justify-content: center; min-height: 220px; gap: 6px; }
+.acct-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; color: var(--text); text-decoration: none; padding: 2px 0; }
+.acct-row:hover .ellipsis { color: var(--accent); }
+.first-snap { display: flex; flex-direction: column; justify-content: center; gap: 14px; flex: 1; }
 
 /* light ↔ dark: a gentle cross-fade instead of a flash */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .45s; animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
 .theme-fading, .theme-fading *, .theme-fading *::before, .theme-fading *::after { transition: background-color .4s ease, color .4s ease, border-color .4s ease, fill .4s ease, stroke .4s ease, box-shadow .4s ease !important; }
+
+/* no dead space: cards in a row are equal height, and a chart fills whatever height its card gets */
+.grid > .card { display: flex; flex-direction: column; }
+.grid > .card > .chart:last-child { flex: 1 1 auto; height: auto; min-height: 260px; }
+.grid > .card > .chart.tall:last-child { min-height: 320px; }
+.grid > .card > .chart.short:last-child { min-height: 180px; }
+.grid > .card > .chart:last-child > canvas { position: absolute; inset: 0; }
+.grid > .card > .table-wrap:last-child { flex: 1 1 auto; }
+/* net worth by type (single balance update) */
+.breakdown { display: flex; flex-direction: column; gap: 12px; }
+.bd-row { display: grid; grid-template-columns: minmax(110px, 1.1fr) minmax(60px, 2fr) auto 52px; gap: 12px; align-items: center; font-size: 14px; }
+.bd-label { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-label .dot { flex: none; margin: 0; }
+.grid > .card > :is(a, button, .btn) { align-self: flex-start; }
+.bd-bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.bd-bar > span { display: block; height: 100%; border-radius: 999px; }
+.bd-row b { font-variant-numeric: tabular-nums; text-align: right; }
+.bd-pct { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { .bd-row { grid-template-columns: minmax(0, 1fr) auto 44px; } .bd-bar { display: none; } }
+/* a lone last stat on a 2-column phone grid takes the full row */
+@media (max-width: 900px) { .stats > .stat:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+.seg.sm button { padding: 3px 10px; font-size: 12px; }
+.journal-side { position: sticky; top: 16px; align-self: start; }
+.week-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.week-strip a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 8px; color: var(--text); text-decoration: none; }
+.week-strip a:hover { background: var(--surface-2); }
+.week-strip a.on { background: var(--accent-soft); }
+.wk-mood { font-size: 18px; line-height: 1.2; }
+@media (max-width: 1100px) { .journal-side { position: static; } }

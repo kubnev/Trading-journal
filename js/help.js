@@ -5,7 +5,7 @@ import { startTour } from './tour.js';
 
 const GUIDE = [
   { id: 'overview', title: 'Overview', match: p => p === '/', body: `
-    <p>Your home page, net worth first: net worth and its 12-month change, liquid net worth, what your money earns in interest, the net-worth trend and where your money sits — then your planned moves, cash runway, today's journal and a short look at this month's spending.</p>
+    <p>Your home page, net worth first: net worth and its 12-month change, liquid net worth, what your money earns in interest, the net-worth trend and where your money sits — then your largest accounts, cash runway, today's journal and a short look at this month's spending.</p>
     <ul><li>Numbers marked <span class="tag est">estimate</span> use your <a href="#/setup">starting estimates</a> until there's real history.</li>
     <li><b>Update balances</b> every so often (monthly is plenty) — each update is a snapshot on your net-worth history.</li>
     <li><b>+ Expense</b> (or the <kbd>N</kbd> key) logs spending from any page.</li></ul>` },
@@ -25,13 +25,6 @@ const GUIDE = [
     <li><b>Close</b> an account when sold or paid off — its history stays.</li></ul>` },
   { id: 'update', title: 'Update balances', match: p => p === '/networth/update', body: `
     <p>Record what each account is worth on a date. Fields are pre-filled with the latest values (including interest growth), so you only change what moved. Holdings accounts fill themselves. Monthly is the usual rhythm — whenever suits you is fine.</p>` },
-  { id: 'moves', title: 'Moves', match: p => p === '/networth/moves', body: `
-    <p>Plan money moves between your own accounts: cash out profits from an exchange, top up savings, pay down a card, rebalance.</p>
-    <ul><li><b>Mark done</b> takes the amount off the From account and adds it to the To account (today's balances). <b>Undo</b> reverses it.</li>
-    <li>Different currencies: fill in what arrives, or leave it blank for today's exchange rate.</li>
-    <li><b>Interest / yr</b> shows what the move gains or loses in interest, from the APYs of both accounts (or the APR of a debt you pay down).</li>
-    <li>If you set target percentages on Analytics, this page lists which types are outside the rebalancing band and by how much.</li>
-    <li>Holdings accounts are valued from quantity × price, so update their holdings yourself after a move.</li></ul>` },
   { id: 'interest', title: 'Interest', match: p => p === '/networth/interest', body: `
     <p>What your money earns and what your debts cost.</p>
     <ul><li>Set an <b>APY</b> on an account (Accounts → Edit). Its balance then grows daily from your last update — banks typically compound daily and pay monthly; the app follows the same curve.</li>
@@ -43,7 +36,7 @@ const GUIDE = [
     <li><b>Liquidity ladder</b> — cash → liquid investments → locked/retirement → illiquid.</li>
     <li><b>Effective positions</b> — 1 ÷ Herfindahl index: how diversified your assets really are.</li>
     <li><b>Balance-sheet health</b> — rules of thumb (cash runway, debt-to-asset, concentration, exchange exposure…). Guidelines, not laws.</li>
-    <li><b>Target allocation</b> — set a target % per type. Red drift = outside the rebalancing band (5 points, or 25% of the target if smaller); plan the transfers on <a href="#/networth/moves">Moves</a>.</li></ul>` },
+    <li><b>Target allocation</b> — set a target % per type. Red drift = outside the rebalancing band (5 points, or 25% of the target if smaller).</li></ul>` },
   { id: 'spending', title: 'Spending', match: p => p === '/spending', body: `
     <p>Month-by-month view of where your money goes. Use ← → to move between months.</p>
     <ul><li><b>Spending through the month</b> — cumulative spending vs last month and your budget pace.</li>
@@ -55,7 +48,7 @@ const GUIDE = [
     <ul><li>Click an expense to edit or delete it.</li>
     <li><b>Paid from account</b> + <b>Take it off this account's balance</b> links spending to net worth: the account's balance drops today by the amount (converted to its currency). Editing or deleting the expense puts it back. On a credit card it adds to what you owe.</li>
     <li><b>Import CSV</b> takes your bank's statement export: money going out becomes expenses, money coming in is skipped, duplicates are skipped and merchants you've categorised before are recognised.</li>
-    <li>Moving money between your own accounts isn't spending — use <a href="#/networth/moves">Moves</a>.</li></ul>` },
+    <li>Moving money between your own accounts isn't spending — just update both balances.</li></ul>` },
   { id: 'calendar', title: 'Calendar', match: p => p === '/spending/calendar', body: `<p>Each day shows what you spent (darker = more) and 🔁 bills that are coming up. Click a day to see its expenses or add one on that date. "—" marks a no-spend day.</p>` },
   { id: 'budgets', title: 'Budgets', match: p => p === '/spending/budgets', body: `
     <p>Set a total monthly budget and, optionally, limits for the categories you want to watch.</p>

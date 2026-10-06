@@ -1,6 +1,6 @@
 {
-  "version": "1.3.2",
-  "notes": "Smooth light/dark cross-fade.",
+  "version": "1.4.0",
+  "notes": "Moves removed; no empty space; own-currency view; 0% APY on savings.",
   "files": [
     "css/app.css",
     "js/backup.js",
@@ -16,8 +16,8 @@
     "js/migrate.js",
     "js/mode.js",
     "js/networth/calc.js",
+    "js/networth/interest.js",
     "js/networth/ledger.js",
-    "js/networth/moves.js",
     "js/networth/prices.js",
     "js/networth/views.js",
     "js/onboarding.js",

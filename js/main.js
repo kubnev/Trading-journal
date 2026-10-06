@@ -10,7 +10,7 @@ import { txnModal } from './spend/txn.js';
 import { postDueRecurring } from './spend/calc.js';
 import { migrateLegacy } from './migrate.js';
 import * as N from './networth/views.js';
-import * as MV from './networth/moves.js';
+import { interest } from './networth/interest.js';
 import * as J from './journal/views.js';
 import { openHelp } from './help.js';
 import { maybeStartTour, cleanupTourDemo, startTour } from './tour.js';
@@ -45,7 +45,6 @@ const NAV = [
     { path: '/networth', label: 'Net worth', icon: I.grid },
     { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
     { path: '/networth/update', label: 'Update balances', icon: I.flow },
-    { path: '/networth/moves', label: 'Moves', icon: I.swap },
     { path: '/networth/interest', label: 'Interest', icon: I.bank },
     { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
   ] },
@@ -79,14 +78,13 @@ const ROUTES = [
   [/^\/networth\/update$/, N.update],
   [/^\/networth\/accounts$/, N.accounts],
   [/^\/networth\/analytics$/, N.analytics],
-  [/^\/networth\/moves$/, MV.moves],
-  [/^\/networth\/interest$/, MV.interest],
+  [/^\/networth\/interest$/, interest],
   [/^\/journal$/, J.journalDay],
   [/^\/journal\/history$/, J.history],
   [/^\/journal\/insights$/, J.insights],
 ];
 // old links keep working
-const REDIRECTS = { '/networth/cashflow': '/spending', '/networth/plan': '/networth/analytics', '/trading': '/' };
+const REDIRECTS = { '/networth/cashflow': '/spending', '/networth/plan': '/networth/analytics', '/networth/moves': '/networth', '/trading': '/' };
 
 const icon = d => raw(`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`);
 

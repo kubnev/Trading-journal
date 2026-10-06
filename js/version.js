@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '1.3.2';
+export const APP_VERSION = '1.4.0';
 
 export const CHANGELOG = [
+  ['1.4.0', 'Removed the Moves page. No more empty space: stat rows stretch to the full width, charts fill their card’s height, and with a single balance update Net worth and the Overview show your money by type instead of an empty chart; an Interest card replaces the empty Debt card when you have no debts; Analytics, Interest and Journal fill their rows too (Journal gets a “Last 7 days” card). Accounts on Net worth show the account’s own currency under the converted amount, with a switch to show own currency first. Savings accounts without a yield show “0% APY”. Overview: “Largest accounts” card.'],
   ['1.3.2', 'Switching between light and dark now cross-fades smoothly instead of flashing (off when your device asks for reduced motion).'],
   ['1.3.1', 'Removed the “Stored locally in this browser” line from the sidebar.'],
   ['1.3.0', 'Built around balances instead of income. Removed: income entries, savings rate, FI planning and the To-do card (old income entries are hidden and can be deleted). New Moves page: plan transfers between your accounts (take profits, top up savings, pay a card, rebalance), see the interest each move gains or loses, mark it done and both balances update, or undo. New Interest page: per account earnings per day / month / year, earned since the last update and this year (APY changes keep the old rate for the past), what debts cost and cash that earns nothing. Expenses and subscriptions can be taken off an account’s balance (optional; reversed on edit or delete). Accounts & holdings is grouped by type with totals. The emotional journal is back under Spending — mood, energy, stress, sleep, habits — with insights on how you feel vs what you spend. Overview and Net worth now show interest, planned moves and cash runway; target allocation moved to Analytics with a 5/25 rebalancing band. Fixed: estimate tags cut off in narrow stat labels, and empty trend charts with a single balance update.'],

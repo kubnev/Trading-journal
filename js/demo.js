@@ -1,5 +1,5 @@
 // Realistic sample data: six months of everyday spending, bills and budgets, a 30-month net-worth
-// history with yields, crypto across custodians and trading capital, planned moves and seven
+// history with yields, crypto across custodians and trading capital, and seven
 // weeks of journal entries.
 // Every record is flagged `demo: true` so it can be removed without touching real entries.
 import * as store from './store.js';
@@ -158,15 +158,6 @@ export async function loadDemo() {
   await store.putMany('recurring', bills.map(b => ({ ...b, accountId: b.category === 'subscriptions' && b.method === 'Credit card' ? nw.cc.id : nw.checking.id, deduct: false })));
   await store.putMany('txns', txns.filter(t => t.recurringId).map(t => ({ ...t, accountId: store.get('recurring', t.recurringId)?.accountId || '' })));
   await store.putMany('nwSnapshots', snaps.filter(s => !store.all('nwSnapshots').some(x => x.date === s.date)));
-  // planned and done moves between accounts
-  const plus = n => dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + n));
-  const MV = (fromId, toId, amount, currency, date, note, extra = {}) => ({ id: id(), demo: true, fromId, toId, amount, currency, date, note, status: 'planned', ...extra });
-  await store.putMany('nwMoves', [
-    MV(nw.bybit.id, nw.hysa.id, 1500, 'USDT', plus(4), 'Take profits off the exchange', { toAmount: null }),
-    MV(nw.checking.id, nw.cc.id, 600, 'EUR', plus(9), 'Pay off the card (21% APR)'),
-    MV(nw.cexAcc.id, nw.cold.id, 1000, 'USD', plus(20), 'Move USDC to self-custody'),
-    MV(nw.trading.id, nw.mmf.id, 2000, 'USD', dayKey(new Date(now.getFullYear(), now.getMonth() - 1, 3)), 'Quarterly profit cash-out', { status: 'done', doneAt: dayKey(new Date(now.getFullYear(), now.getMonth() - 1, 3)) }),
-  ]);
   // a sample target allocation (never touches your own targets); removed with the demo
   const pl = store.getSettings().plan;
   const simple = store.getSettings().mode !== 'pro';

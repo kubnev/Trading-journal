@@ -10,7 +10,7 @@ The owner is a trader: income is irregular (profits are cashed out a few times a
 
 **Interest follow-up.** Banks typically quote APY, compound daily and credit monthly. The app grows each yield account at its APY daily from the last recorded balance — (1 + APY)^(days/365) — so the curve matches the bank's between updates. "Earned since last update" and "this year" are estimates from that curve; each manual balance update (which includes the interest actually paid) restarts it. APY changes are kept with a start date so past periods use the old rate. Idle cash (cash/savings with no APY) and debt APR costs are shown alongside; paying a debt whose APR beats the blended savings APY is flagged as a guaranteed return.
 
-**Moves.** A planned transfer between two of your own accounts is not spending. Marking it done writes both new balances into today's snapshot (converted between currencies, or the amount you say arrived), and can be undone. Each move shows its interest effect: amount × (APY of destination − APY of source), or the APR of a debt it pays down.
+**Moves (removed in v1.4 — not useful in practice).** A planned transfer between two of your own accounts is not spending. Marking it done writes both new balances into today's snapshot (converted between currencies, or the amount you say arrived), and can be undone. Each move shows its interest effect: amount × (APY of destination − APY of source), or the APR of a debt it pays down.
 
 **Linking spending to balances (optional).** An expense can be taken off the account it was paid from; the change goes into today's snapshot, is reversed on edit/delete, and is overridden by the next manual balance update — so manual updates stay the source of truth.
 

@@ -1,12 +1,11 @@
 // Overview: net worth first — what you own, how it's moving, where it sits, what it earns, the
-// moves you've planned — then how you're doing (journal) and a compact look at this month's spending.
+// biggest accounts — then how you're doing (journal) and a compact look at this month's spending.
 import * as store from './store.js';
 import { html, money, pct, num, pnlClass, stat, fmtDate, today, dayKey, parseDay, estTag } from './ui.js';
-import { moneyIn } from './fx.js';
 import { MOODS, streaks } from './journal/views.js';
 import * as C from './charts.js';
 import { nwSeries, assetCats, baseline, yearAgoEstimate, interestOverview } from './networth/calc.js';
-import { yieldCard, startTicker, lastUpdate } from './networth/views.js';
+import { yieldCard, startTicker, lastUpdate, typeBreakdown } from './networth/views.js';
 import * as S from './spend/calc.js';
 import { catLabel } from './spend/categories.js';
 import { loadDemo } from './demo.js';
@@ -21,7 +20,7 @@ export default async function home(el) {
   if (!hasAny) {
     el.innerHTML = String(html`
       <section class="hero"><h1>${greet}.</h1>
-        <p>Your private place to see <b>where your money sits</b>, what it earns, the moves you plan — and where it goes. Everything stays in this browser — nothing is uploaded.</p></section>
+        <p>Your private place to see <b>where your money sits</b>, what it earns — and where it goes. Everything stays in this browser — nothing is uploaded.</p></section>
       <div class="grid g3">
         <div class="choice"><h2>Add your accounts</h2><p class="small muted">Bank, savings, exchanges, brokers, wallets, things you own — and any debts. Then update the balances every so often.</p><a class="btn primary" href="#/networth/accounts">Add accounts</a></div>
         <div class="choice"><h2>Log spending</h2><p class="small muted">Amount, category, done. Press <kbd>N</kbd> any time.</p><button class="btn" data-quick-add>+ Add expense</button></div>
@@ -48,8 +47,7 @@ export default async function home(el) {
   const last = lastUpdate();
   const daysSince = last ? Math.floor((Date.now() - parseDay(last)) / 864e5) : null;
   const aCats = assetCats(), alloc = cur ? aCats.filter(c => (cur.byCat[c.id] || 0) > 0) : [];
-  const planned = store.all('nwMoves').filter(x => x.status !== 'done').sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  const acctName = id => store.get('nwAccounts', id)?.name || '—';
+  const biggest = cur ? store.all('nwAccounts').filter(a => a.kind !== 'liability' && !a.archivedAt && (cur.byAcct[a.id] || 0) > 0).sort((a, b) => cur.byAcct[b.id] - cur.byAcct[a.id]).slice(0, 5) : [];
   const jToday = store.get('days', today());
   const jst = streaks();
   const stale = daysSince != null && daysSince > 35;
@@ -66,13 +64,13 @@ export default async function home(el) {
     </div>
     ${yieldCard() ? html`<div class="mt">${yieldCard()}</div>` : ''}
     <div class="grid g-2-1 mt">
-      <div class="card" data-tour="nw-chart"><div class="card-head"><h2>Net worth</h2><a class="hint" href="#/networth">Details →</a></div>${series.length > 1 ? html`<div class="chart tall"><canvas id="o-nw"></canvas></div>` : html`<p class="muted small">Your first balance update is in${cur ? ` (${fmtDate(cur.date)})` : ''}. Update again next month and your net-worth line starts here. <a href="#/networth/update">Update balances →</a></p>`}</div>
+      <div class="card" data-tour="nw-chart"><div class="card-head"><h2>Net worth</h2><a class="hint" href="#/networth">Details →</a></div>${series.length > 1 ? html`<div class="chart tall"><canvas id="o-nw"></canvas></div>` : html`<div class="first-snap">${cur ? typeBreakdown(cur) : ''}<p class="muted small" style="margin:0">Your first balance update is in${cur ? ` (${fmtDate(cur.date)})` : ''}. Update again next month and your net-worth line starts here. <a href="#/networth/update">Update balances →</a></p></div>`}</div>
       <div class="card" data-tour="alloc"><div class="card-head"><h2>Where it sits</h2><a class="hint" href="#/networth/analytics">Analytics →</a></div>${alloc.length ? html`<div class="chart tall"><canvas id="o-alloc"></canvas></div>` : html`<p class="muted small">Add accounts to see how your money is split.</p>`}</div>
     </div>
     <div class="grid g3 mt">
-      <div class="card" data-tour="moves"><div class="card-head"><h2>Planned moves</h2><a class="hint" href="#/networth/moves">Moves →</a></div>
-        ${planned.length ? html`<div class="stack" style="gap:6px">${planned.slice(0, 4).map(x => html`<a class="move-row small" href="#/networth/moves"><span class="${x.date < today() ? 'neg' : 'muted'}">${fmtDate(x.date, { month: 'short', day: 'numeric' })}</span><span class="ellipsis">${acctName(x.fromId)} → ${acctName(x.toId)}</span><b>${moneyIn(+x.amount, x.currency)}</b></a>`)}</div>${planned.length > 4 ? html`<p class="small muted">+ ${planned.length - 4} more</p>` : ''}`
-          : html`<p class="small muted">Plan your next transfer — take profits off an exchange, top up savings, pay down a card. Mark it done and both balances update.</p><a class="btn sm" href="#/networth/moves">+ Plan a move</a>`}</div>
+      <div class="card" data-tour="biggest"><div class="card-head"><h2>Largest accounts</h2><a class="hint" href="#/networth/accounts">Accounts →</a></div>
+        ${biggest.length ? html`<div class="stack" style="gap:7px">${biggest.map(a => html`<a class="acct-row small" href="#/networth/accounts"><span class="ellipsis">${a.name}</span><span class="muted">${pct(cur.byAcct[a.id] / cur.assets, 0)}</span><b>${money(cur.byAcct[a.id], { compact: cur.byAcct[a.id] >= 1e6 })}</b></a>`)}</div>`
+          : html`<p class="small muted">Add accounts to see where most of your money is.</p>`}</div>
       <div class="card"><div class="card-head"><h2>Cash runway</h2></div>
         <div class="stat-value">${efMonths != null ? `${num(efMonths, 1)} months` : '—'}${estTag(base.estimated.spending)}</div>
         <p class="small muted" style="margin:4px 0 0">${efMonths != null ? html`Cash & savings cover this many months of your ${base.estimated.spending ? 'estimated' : 'usual'} spending (${money(base.avgExpenses)} / month).` : html`Log spending or add a monthly spending <a href="#/setup">estimate</a> to see how long your cash lasts.`}</p>

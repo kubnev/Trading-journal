@@ -8,6 +8,7 @@ import { updateAllPrices, summaryText, holdingsTotal, holdingValue, syncHoldings
 import { go, refresh, query } from '../main.js';
 
 const RANGES = [['all', 'All'], ['1y', '1Y'], ['3y', '3Y'], ['5y', '5Y']];
+let nativeFirst = (() => { try { return localStorage.getItem('tj.nativeFirst') === '1'; } catch { return false; } })();
 let range = 'all';
 const catColor = (id, p) => { const i = assetCats().findIndex(c => c.id === id); return i >= 0 ? p.series[i % 8] : p.series[(liabCats().findIndex(c => c.id === id) + 2) % 8]; };
 // Categories beyond 8 share hues, so allocation charts fold small ones into "Other" (max 7 slices)
@@ -64,6 +65,26 @@ export function startTicker(root) {
   return setInterval(() => { const el = root.querySelector('[data-earned]'); if (el) { const y = yieldSummary(); el.textContent = money(y.earnedToday, { decimals: tickDecimals(y.perSecond) }); } }, 1000);
 }
 
+// Net worth by type as bars — used when there's only one balance update, so there's no trend to draw yet
+export function typeBreakdown(cur) {
+  const p = C.palette();
+  const debtCats = liabCats();
+  const cats = [...assetCats(), ...debtCats].filter(c => (cur.byCat[c.id] || 0) > 0);
+  return html`<div class="breakdown">${cats.map(c => { const v = cur.byCat[c.id], debt = debtCats.includes(c), share = cur.assets ? v / cur.assets : 0, col = catColor(c.id, p);
+    return html`<div class="bd-row"><span class="bd-label"><span class="dot" style="background:${col}"></span>${c.label}</span><span class="bd-bar"><span style="width:${Math.min(100, share * 100)}%;background:${col}"></span></span><b class="${debt ? 'neg' : ''}">${money(debt ? -v : v)}</b><span class="muted small bd-pct">${debt ? '' : pct(share, 1)}</span></div>`; })}</div>`;
+}
+
+// Interest summary card — fills the slot the debt chart uses when there are no debts
+function interestMini(io) {
+  return html`<div class="card"><div class="card-head"><h2>Interest</h2><a class="hint" href="#/networth/interest">Details →</a></div>
+    ${io.earn.length ? html`<div class="stat-value pos">${money(io.earnMonth)} <span class="small muted" style="font-family:var(--font-sans);font-weight:400">/ month</span></div>
+      <div class="stat-sub">${pct(io.blended, 2)} blended on ${money(io.earnValue, { compact: true })} · ${money(io.earnYear)} / year</div>
+      <dl class="kv small mt">${io.earn.slice(0, 4).map(x => html`<dt>${x.a.name} <span class="muted">${num(x.apy, 2)}%</span></dt><dd>${money(x.perMonth)} / mo</dd>`)}</dl>
+      ${io.idleValue > 0 ? html`<p class="small muted" style="margin:10px 0 0">${money(io.idleValue, { compact: true })} in cash & savings earns nothing.</p>` : ''}`
+      : html`<p class="small muted">No account has an interest rate yet. Set an APY on savings (Accounts → Edit) and its balance grows daily; this card shows what it earns.</p>`}
+    <p class="small muted" style="margin:10px 0 0">No debts recorded.</p></div>`;
+}
+
 // ================= overview =================
 export async function overview(el) {
   const accts = store.all('nwAccounts');
@@ -94,6 +115,9 @@ export async function overview(el) {
     const liquidShare = cur.assets ? cur.liquid / cur.assets : null;
     const chg = changes(series);
     const one = series.length < 2;
+    const multiCcy = accts.some(a => !a.archivedAt && !sameMoney(ccyOf(a), displayCcy()));
+    // converted to the display currency, with the account's own currency underneath (or the other way round)
+    const balCell = (a, v, nat) => { const sg = a.kind === 'liability' ? -1 : 1; if (sameMoney(ccyOf(a), displayCcy())) return money(sg * v); const conv = money(sg * v), own = moneyIn(sg * nat, ccyOf(a)); return nativeFirst ? html`${own}<div class="dist">≈ ${conv}</div>` : html`${conv}<div class="dist">${own}</div>`; };
 
     body.innerHTML = String(html`
       <div class="stats big">
@@ -112,7 +136,7 @@ export async function overview(el) {
       </div>
       <div class="grid g-2-1 mt">
         <div class="card"><div class="card-head"><h2>Net worth over time</h2><span class="hint">net worth, assets & debts</span></div>
-          ${one ? html`<div class="first-snap"><div class="stat-value">${money(cur.net)}</div><p class="muted small">One balance update so far (${fmtDate(cur.date)}). Each update adds a point — update again next month and your trend line starts here. Assets by type and change per update appear then too. <a href="#/networth/update">Update balances →</a></p></div>` : html`<div class="chart tall"><canvas id="n-line"></canvas></div>`}</div>
+          ${one ? html`<div class="first-snap">${typeBreakdown(cur)}<p class="muted small" style="margin:0">One balance update so far (${fmtDate(cur.date)}). Each update adds a point — update again next month and your trend line starts here. Assets by type and change per update appear then too. <a href="#/networth/update">Update balances →</a></p></div>` : html`<div class="chart tall"><canvas id="n-line"></canvas></div>`}</div>
         <div class="card"><div class="card-head"><h2>Asset allocation</h2><span class="hint">by type</span></div><div class="chart tall"><canvas id="n-alloc"></canvas></div></div>
       </div>
       ${one ? html`<div class="grid g2 mt">
@@ -125,7 +149,7 @@ export async function overview(el) {
           ${liquidShare != null && liquidShare < 0.15 ? html`<div class="callout warn mt"><span class="ic">!</span><div>Under 15% of your assets are liquid.</div></div>` : ''}
         </div>
         ${lCats.length ? html`<div class="card"><div class="card-head"><h2>Debt breakdown</h2><span class="hint">${debt.wRate != null ? `weighted APR ${num(debt.wRate, 2)}%` : ''}</span></div><div class="chart"><canvas id="n-debt"></canvas></div></div>`
-                          : html`<div class="card"><div class="card-head"><h2>Debt</h2></div><p class="muted">No debts recorded.</p></div>`}
+                          : interestMini(io)}
       </div>` : html`
       <div class="grid g-2-1 mt">
         <div class="card"><div class="card-head"><h2>Assets by type</h2><span class="hint">stacked</span></div><div class="chart"><canvas id="n-stack"></canvas></div></div>
@@ -141,15 +165,15 @@ export async function overview(el) {
       <div class="grid g2 mt">
         <div class="card"><div class="card-head"><h2>Change per update</h2><span class="hint">net worth change between balance updates</span></div><div class="chart"><canvas id="n-chg"></canvas></div></div>
         ${lCats.length ? html`<div class="card"><div class="card-head"><h2>Debt breakdown</h2><span class="hint">${debt.wRate != null ? `weighted APR ${num(debt.wRate, 2)}%` : ''}</span></div><div class="chart"><canvas id="n-debt"></canvas></div></div>`
-                          : html`<div class="card"><div class="card-head"><h2>Debt</h2></div><p class="muted">No debts recorded.</p></div>`}
+                          : interestMini(io)}
       </div>`}
-      <div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Accounts</h2><a class="hint" href="#/networth/accounts">Manage →</a></div>
+      <div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Accounts</h2><div class="row">${multiCcy ? html`<div class="seg sm" role="radiogroup" aria-label="Show balances in"><button data-native="0" class="${nativeFirst ? '' : 'on'}">${displayCcy()}</button><button data-native="1" class="${nativeFirst ? 'on' : ''}">Own currency</button></div>` : ''}<a class="hint" href="#/networth/accounts">Manage →</a></div></div>
         <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Account</th><th>Type</th><th>Liquid</th><th class="num">Balance</th><th class="num">Change</th><th class="num">% of assets</th><th style="width:120px">Trend</th></tr></thead>
         <tbody>${accts.filter(a => !a.archivedAt).sort((a, b) => (a.kind === 'liability') - (b.kind === 'liability') || (cur.byAcct[b.id] || 0) - (cur.byAcct[a.id] || 0)).map(a => {
           const v = cur.byAcct[a.id] || 0, pv = prev ? prev.byAcct[a.id] || 0 : null;
           const d = pv == null ? null : (a.kind === 'liability' ? -(v - pv) : v - pv);
           return html`<tr><td><b>${a.name}</b>${a.institution ? html` <span class="muted small">${a.institution}</span>` : ''}</td><td>${typeLabel(a)}</td><td>${a.kind === 'liability' ? '' : isLiquid(a) ? 'Yes' : 'No'}</td>
-            <td class="num ${a.kind === 'liability' ? 'neg' : ''}">${money(a.kind === 'liability' ? -v : v)}</td><td class="num ${pnlClass(d)}">${d ? money(d, { sign: true }) : '—'}</td><td class="num">${a.kind === 'liability' ? '' : pct(cur.assets ? v / cur.assets : null, 1)}</td><td>${one ? '' : html`<div style="height:28px;width:110px"><canvas data-spark="${a.id}"></canvas></div>`}</td></tr>`;
+            <td class="num ${a.kind === 'liability' ? 'neg' : ''}">${balCell(a, v, cur.byAcctNative[a.id] || 0)}</td><td class="num ${pnlClass(d)}">${d ? money(d, { sign: true }) : '—'}</td><td class="num">${a.kind === 'liability' ? '' : pct(cur.assets ? v / cur.assets : null, 1)}</td><td>${one ? '' : html`<div style="height:28px;width:110px"><canvas data-spark="${a.id}"></canvas></div>`}</td></tr>`;
         })}</tbody>
         <tfoot><tr><td colspan="3">Net worth</td><td class="num">${money(cur.net)}</td><td class="num ${pnlClass(ch)}">${ch != null ? money(ch, { sign: true }) : ''}</td><td colspan="2"></td></tr></tfoot></table></div></div>`);
 
@@ -172,6 +196,7 @@ export async function overview(el) {
     if (lCats.length) C.doughnut(body.querySelector('#n-debt'), { labels: lCats.map(c => c.label), values: lCats.map(c => cur.byCat[c.id]), colors: lCats.map(c => catColor(c.id, p)), center: { value: money(cur.liabilities, { compact: true }), label: 'owed' } });
   };
   draw();
+  body.addEventListener('click', e => { const b = e.target.closest('[data-native]'); if (!b) return; nativeFirst = b.dataset.native === '1'; try { localStorage.setItem('tj.nativeFirst', nativeFirst ? '1' : '0'); } catch {} draw(); });
   let tick = startTicker(body);
   return () => clearInterval(tick);
 }
@@ -401,7 +426,7 @@ export async function accounts(el) {
   const totalAssets = cur.assets || 0;
   const sec = (title, list, { hint = '', debt = false } = {}) => { const tot = list.filter(a => !a.archivedAt).reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0); return html`<div class="card mt acct-group" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><div><h2>${title}</h2>${hint ? html`<div class="small muted">${hint}</div>` : ''}</div><span class="hint"><b class="${debt ? 'neg' : ''}">${money(debt ? -tot : tot)}</b>${!debt && totalAssets ? html` · ${pct(tot / totalAssets, 1)} of assets` : ''}</span></div>
     <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Institution</th><th>Details</th><th class="num">Balance</th><th></th></tr></thead><tbody>
-    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : ''}${a.kind === 'liability' && +a.rate ? html` <span class="tag">${a.rate}% APR</span>` : ''}</td><td>${a.institution || ''}</td>
+    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : a.kind !== 'liability' && groupOf(a) === 'savings' ? html` <span class="tag">0% APY</span>` : ''}${a.kind === 'liability' && +a.rate ? html` <span class="tag">${a.rate}% APR</span>` : ''}</td><td>${a.institution || ''}</td>
       <td class="small muted">${a.kind === 'liability' ? [typeLabel(a), a.payment ? `${moneyIn(+a.payment, ccyOf(a))}/mo` : ''].filter(Boolean).join(' · ') : [simpleMode() ? '' : typeLabel(a), custodyLabel(custodyOf(a)), purposeOf(a), isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>
       <td class="num ${a.kind === 'liability' ? 'neg' : ''}">${moneyIn((a.kind === 'liability' ? -1 : 1) * (cur.byAcctNative[a.id] || 0), ccyOf(a))}${!sameMoney(ccyOf(a), displayCcy()) ? html`<div class="dist">≈ ${money((a.kind === 'liability' ? -1 : 1) * (cur.byAcct[a.id] || 0))}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
@@ -451,10 +476,10 @@ function renderTargets(host, cur) {
   const targetSum = aCats.reduce((a, c) => a + (+ta[c.id] || 0), 0);
   host.innerHTML = String(html`<div class="grid g2 mt">
       <form class="card" id="tf"><div class="card-head"><h2>Target allocation</h2><span class="hint ${Math.abs(targetSum - 100) > 0.01 && targetSum ? 'neg' : ''}">${targetSum ? `targets add up to ${num(targetSum, 0)}%` : 'set a target % per type'}</span></div>
-        ${aCats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Type</th><th class="num">Current</th><th class="num">Target %</th><th class="num">Drift</th><th class="num">To rebalance</th></tr></thead><tbody>
+        ${aCats.length ? html`<div class="table-wrap" style="border:0"><table class="data compact"><thead><tr><th>Type</th><th class="num">Current</th><th class="num">Target %</th><th class="num">Drift</th><th class="num">Adjust by</th></tr></thead><tbody>
         ${aCats.map(c => { const curPct = cur.assets ? (cur.byCat[c.id] || 0) / cur.assets : 0; const tg = +ta[c.id] || 0; const drift = tg ? curPct - tg / 100 : null; const reb = tg ? (tg / 100) * cur.assets - (cur.byCat[c.id] || 0) : null; const out = drift != null && Math.abs(drift) > band(tg);
-          return html`<tr><td><span class="dot" style="background:${catColor(c.id, C.palette())}"></span>${c.label}</td><td class="num">${pct(curPct, 1)}</td><td class="num"><input name="${c.id}" type="number" min="0" max="100" step="1" value="${tg || ''}" style="width:70px;text-align:right" aria-label="${c.label} target"></td><td class="num ${out ? 'neg' : ''}">${drift == null ? '—' : num(drift * 100, 1, { sign: true }) + ' pts'}</td><td class="num ${out ? '' : 'muted'}">${reb == null ? '—' : money(reb, { sign: true })}</td></tr>`; })}
-        </tbody></table></div><div class="row mt"><span class="small muted">Red = outside the rebalancing band (5 points, or 25% of the target if smaller). Use <a href="#/networth/moves">Moves</a> to plan the transfers.</span><span class="spacer"></span><button class="btn primary">Save targets</button></div>` : html`<p class="muted">Add assets first.</p>`}
+          return html`<tr><td style="white-space:nowrap"><span class="dot" style="background:${catColor(c.id, C.palette())}"></span>${c.label}</td><td class="num">${pct(curPct, 1)}</td><td class="num"><input name="${c.id}" type="number" min="0" max="100" step="1" value="${tg || ''}" style="width:58px;text-align:right" aria-label="${c.label} target"></td><td class="num ${out ? 'neg' : ''}">${drift == null ? '—' : num(drift * 100, 1, { sign: true }) + ' pts'}</td><td class="num ${out ? '' : 'muted'}">${reb == null ? '—' : money(reb, { sign: true })}</td></tr>`; })}
+        </tbody></table></div><div class="row mt"><span class="small muted">Red = outside the rebalancing band (5 points, or 25% of the target if smaller).</span><span class="spacer"></span><button class="btn primary">Save targets</button></div>` : html`<p class="muted">Add assets first.</p>`}
       </form>
       <div class="card"><div class="card-head"><h2>Current vs target</h2></div><div class="chart"><canvas id="p-alloc"></canvas></div></div>
     </div>`);
@@ -492,6 +517,8 @@ export async function analytics(el, _p, { mode }) {
   const custody = CUSTODY.map(c => ({ ...c, v: cur.byCustody[c.id] || 0 })).filter(c => c.v > 0).sort((a, b) => b.v - a.v);
   const purposes = Object.entries(cur.byPurpose).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const tiers = TIERS.map(t => ({ t, v: cur.byTier[t] || 0 }));
+  const custTbl = html`<table class="data compact"><tbody>${custody.map(c => html`<tr><td>${c.label}</td><td class="num">${money(c.v)}</td><td class="num">${pct(c.v / cur.assets, 1)}</td></tr>`)}</tbody></table>`;
+  const purpTbl = html`<table class="data compact"><tbody>${purposes.map(([k, v]) => html`<tr><td>${k}</td><td class="num">${money(v)}</td><td class="num">${pct(v / cur.assets, 1)}</td></tr>`)}</tbody></table>`;
   const crypto = store.all('nwAccounts').filter(a => a.category === 'crypto' && a.kind !== 'liability').reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0);
   const annualExp = t12.avgExpenses ? t12.avgExpenses * 12 : null;
   const cash = (cur.byCat.cash || 0) + (cur.byCat.savings || 0);
@@ -528,11 +555,14 @@ export async function analytics(el, _p, { mode }) {
       <div class="card"><div class="card-head"><h2>Liquidity ladder</h2><span class="hint">how fast you could reach it</span></div><div class="chart short"><canvas id="a-tier"></canvas></div></div>
       <div class="card"><div class="card-head"><h2>Largest positions</h2><span class="hint">% of assets</span></div><div class="chart short"><canvas id="a-top"></canvas></div></div>
     </div>
-    <div class="grid g-2-1 mt">
+    ${series.length > 1 ? html`<div class="grid g-2-1 mt">
       <div class="card"><div class="card-head"><h2>Custody over time</h2><span class="hint">stacked</span></div><div class="chart"><canvas id="a-custt"></canvas></div></div>
-      <div class="card"><div class="card-head"><h2>By custody</h2></div><table class="data compact"><tbody>${custody.map(c => html`<tr><td>${c.label}</td><td class="num">${money(c.v)}</td><td class="num">${pct(c.v / cur.assets, 1)}</td></tr>`)}</tbody></table>
-        <h3 class="mt">By purpose</h3><table class="data compact"><tbody>${purposes.map(([k, v]) => html`<tr><td>${k}</td><td class="num">${money(v)}</td><td class="num">${pct(v / cur.assets, 1)}</td></tr>`)}</tbody></table></div>
-    </div>
+      <div class="card"><div class="card-head"><h2>By custody</h2></div>${custTbl}
+        <h3 class="mt">By purpose</h3>${purpTbl}</div>
+    </div>` : html`<div class="grid g2 mt">
+      <div class="card"><div class="card-head"><h2>By custody</h2><span class="hint">over time after your next update</span></div>${custTbl}</div>
+      <div class="card"><div class="card-head"><h2>By purpose</h2></div>${purpTbl}</div>
+    </div>`}
     <div class="card mt" data-tour="health"><div class="card-head"><h2>Balance-sheet health</h2><span class="hint">rules of thumb used by planners — context matters</span></div>
       <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th></th><th>Measure</th><th class="num">You</th><th>Guideline</th></tr></thead><tbody>
       ${health.map(([name, v, f, judge, guide]) => html`<tr><td style="width:28px">${v == null ? html`<span class="muted">–</span>` : icon(judge(v))}</td><td>${name}</td><td class="num">${v == null ? html`<span class="muted">needs data</span>` : f(v)}</td><td class="small muted">${guide}</td></tr>`)}
@@ -546,7 +576,7 @@ export async function analytics(el, _p, { mode }) {
   const top = pos.slice(0, 8);
   C.plainBars(body.querySelector('#a-top'), { labels: top.map(x => x.label), values: top.map(x => (x.value / posTotal) * 100), horizontal: true, fmt: v => num(v, 1) + '%', label: 'Share of assets' });
   const used = CUSTODY.filter(c => series.some(s => (s.byCustody[c.id] || 0) > 0));
-  C.make(body.querySelector('#a-custt'), {
+  if (series.length > 1) C.make(body.querySelector('#a-custt'), {
     type: 'line',
     data: { labels: series.map(s => fmtDate(s.date, { month: 'short', year: '2-digit' })), datasets: used.map(c => { const col = p.series[CUSTODY.findIndex(x => x.id === c.id) % 8]; return { label: c.label, data: series.map(s => s.byCustody[c.id] || 0), borderColor: col, backgroundColor: C.alpha(col, 0.5), fill: true, borderWidth: 1, tension: 0.15, pointRadius: 0 }; }) },
     options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}` } } }, scales: { x: C.plainAxis({ ticks: { maxTicksLimit: 8, maxRotation: 0 } }), y: { stacked: true, ...C.moneyAxis() } } },

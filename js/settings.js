@@ -75,7 +75,7 @@ export default async function settingsView(el) {
             <label class="btn">Restore from backup…<input type="file" accept=".json,application/json" data-act="import" hidden></label>
           </div>
           <p class="small muted mt" style="margin-bottom:0">
-            ${counts.nwAccounts} accounts · ${counts.nwSnapshots} balance snapshots · ${counts.nwMoves} moves · ${counts.txns} expenses · ${counts.recurring} bills & subscriptions · ${counts.days} journal entries
+            ${counts.nwAccounts} accounts · ${counts.nwSnapshots} balance snapshots · ${counts.txns} expenses · ${counts.recurring} bills & subscriptions · ${counts.days} journal entries
             ${est ? html`<br>Using ${(est.usage / 1048576).toFixed(1)} MB of local storage.` : ''}
           </p>
         </div>

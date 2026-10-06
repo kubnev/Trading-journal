@@ -64,14 +64,6 @@ const F = {
   // ---------- budgets ----------
   'bf:total': 'Your spending limit for a whole month, in the display currency. Leave blank to use the sum of the category limits.',
 
-  // ---------- moves ----------
-  'mvf:fromId': 'The account the money leaves.',
-  'mvf:toId': 'The account it arrives in. Picking a debt means paying it down.',
-  'mvf:amount': 'How much leaves the From account, in its currency.',
-  'mvf:toAmount': 'How much arrives, in the To account’s currency — blank uses today’s exchange rate. Fill it in when the exchange rate or fees differ.',
-  'mvf:date': 'When you plan to do it. Past dates show as overdue until you mark the move done.',
-  'mvf:note': 'Why — e.g. “take profits”, “top up emergency fund”, “rebalance”.',
-
   // ---------- journal ----------
   mood: 'How you feel overall today, from 😣 to 😄.',
   energy: '1 = drained, 5 = full of energy.',
@@ -117,7 +109,7 @@ const H = {
   'Unrealised P&L': 'Current value minus what you paid (cost basis), not locked in yet.',
   'Source': 'Where the price came from and how fresh it is.',
   'Drift': 'Current share minus target share. Red = outside the rebalancing band: 5 percentage points, or 25% of the target if that is smaller (the 5/25 rule).',
-  'To rebalance': 'Roughly how much to add (+) or remove (−) to hit the target allocation.',
+  'Adjust by': 'Roughly how much to add (+) or remove (−) to hit the target allocation.',
   'Target %': 'The share of assets you want in this category. Should add up to 100%.',
   'Current': 'The share of your assets in this category today.',
   'Latest balance': 'Most recent recorded value, in the account’s own currency.',
@@ -134,7 +126,6 @@ const H = {
   'Next': 'Next payment date. Red = past due and not added yet.',
   'Used': 'How many transactions use this category.',
   'Need / want': 'Need = essential, want = optional. Drives the needs-vs-wants split on Spending.',
-  'Interest / yr': 'Yearly interest gained (green) or lost (red) by this move: amount × (APY of the destination − APY of the source). Paying down a debt counts its APR.',
   'Since last update': 'Interest earned since you last typed this balance (estimate at the APY in force).',
   'This year': 'Interest earned since 1 January (estimate). Each balance update restarts the estimate from what you typed.',
   'APY': 'Annual percentage yield — the yearly interest rate including compounding.',
