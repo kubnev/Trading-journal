@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS = {
     emergencyMonths: 6,
   },
   habits: ['Exercise', 'Outside / walk', 'Read', 'No alcohol', 'Screen off before bed'],
+  nav: { order: [], collapsed: {} },   // sidebar: section order and which sections are collapsed
   dayTags: ['Stressed', 'Calm', 'Social', 'Productive', 'Tired', 'Sick'],
 };
 
@@ -240,7 +241,8 @@ function cleanSettings(s) {
   const strList = v => Array.isArray(v) && v.every(x => typeof x === 'string');
   for (const k of ['payMethods', 'habits', 'dayTags']) if (k in out && !strList(out[k])) delete out[k];
   if ('categories' in out && out.categories !== null && !(Array.isArray(out.categories) && out.categories.every(c => isObj(c) && typeof c.id === 'string' && typeof c.name === 'string' && (c.subs == null || strList(c.subs))))) delete out.categories;
-  for (const k of ['fx', 'plan', 'tour', 'priceApi', 'budgets', 'estimates']) if (k in out && !isObj(out[k])) delete out[k];
+  for (const k of ['fx', 'plan', 'tour', 'priceApi', 'budgets', 'estimates', 'nav']) if (k in out && !isObj(out[k])) delete out[k];
+  if (out.nav) out.nav = { order: Array.isArray(out.nav.order) ? out.nav.order.filter(x => typeof x === 'string').slice(0, 20) : [], collapsed: isObj(out.nav.collapsed) ? Object.fromEntries(Object.entries(out.nav.collapsed).filter(([k, v]) => typeof k === 'string' && v === true).slice(0, 20)) : {} };
   return out;
 }
 

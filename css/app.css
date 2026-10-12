@@ -120,7 +120,19 @@ kbd { font: 11px ui-monospace, monospace; background: var(--surface-2); border: 
 .theme-switch button { padding: 5px 6px; font-size: 12.5px; }
 .switch-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin: 0 2px -8px; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
-.nav-group { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 14px 10px 4px; }
+.nav-group { display: flex; align-items: center; gap: 2px; padding: 10px 0 2px; }
+.nav-toggle { flex: 1; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 0; background: none; border-radius: 6px; cursor: pointer; font: 600 11px var(--font-sans); color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; text-align: left; }
+.nav-toggle:hover { color: var(--text-1); background: var(--surface-2); }
+.nav-chev { flex: none; transition: transform .18s ease; }
+.nav-section.shut .nav-chev { transform: rotate(-90deg); }
+.nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; }
+.nav-grip { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-3); cursor: grab; touch-action: none; opacity: 0; transition: opacity .15s; }
+.nav-section:hover .nav-grip, .nav-grip:focus-visible, .nav-section.dragging .nav-grip { opacity: 1; }
+.nav-grip:hover { background: var(--surface-2); color: var(--text-1); }
+.nav-section.dragging { background: var(--surface-2); border-radius: 8px; box-shadow: var(--shadow); }
+.nav-section.dragging .nav-grip { cursor: grabbing; }
+.nav-items { display: flex; flex-direction: column; gap: 2px; }
+@media (hover: none) { .nav-grip { opacity: .55; } }
 .help-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font: 600 16px var(--font-serif); cursor: pointer; display: grid; place-items: center; box-shadow: var(--shadow); }
 .help-btn:hover { color: var(--accent); border-color: var(--accent); }
 .help-fixed { position: fixed; top: 16px; right: 20px; z-index: 25; }

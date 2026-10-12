@@ -1,6 +1,6 @@
 {
-  "version": "1.4.0",
-  "notes": "Moves removed; no empty space; own-currency view; 0% APY on savings.",
+  "version": "1.5.0",
+  "notes": "Collapsible, reorderable sidebar sections.",
   "files": [
     "css/app.css",
     "js/backup.js",

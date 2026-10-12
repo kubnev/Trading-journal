@@ -41,14 +41,14 @@ const I = {
 };
 const NAV = [
   { group: null, items: [{ path: '/', label: 'Overview', icon: I.home }] },
-  { group: 'Net worth', items: [
+  { id: 'networth', group: 'Net worth', items: [
     { path: '/networth', label: 'Net worth', icon: I.grid },
     { path: '/networth/accounts', label: 'Accounts & holdings', icon: I.wallet },
     { path: '/networth/update', label: 'Update balances', icon: I.flow },
     { path: '/networth/interest', label: 'Interest', icon: I.bank },
     { path: '/networth/analytics', label: 'Analytics', icon: I.pie },
   ] },
-  { group: 'Spending', items: [
+  { id: 'spending', group: 'Spending', items: [
     { path: '/spending', label: 'Spending', icon: I.chart },
     { path: '/spending/transactions', label: 'Transactions', icon: I.list },
     { path: '/spending/calendar', label: 'Calendar', icon: I.cal },
@@ -56,7 +56,7 @@ const NAV = [
     { path: '/spending/recurring', label: 'Subscriptions & bills', icon: I.refresh },
     { path: '/spending/categories', label: 'Categories', icon: I.book },
   ] },
-  { group: 'Journal', items: [
+  { id: 'journal', group: 'Journal', items: [
     { path: '/journal', label: 'Today', icon: I.pen },
     { path: '/journal/history', label: 'History', icon: I.cal },
     { path: '/journal/insights', label: 'Insights', icon: I.bulb },
@@ -64,6 +64,15 @@ const NAV = [
 ];
 const hasOwnData = () => ['nwAccounts', 'txns', 'recurring', 'nwSnapshots', 'nwMoves', 'days'].some(c => store.all(c).some(x => !x.demo));
 const ALL_ITEMS = NAV.flatMap(g => g.items);
+// Sidebar sections can be collapsed and put in any order (settings.nav). Overview always stays on top.
+const navPrefs = () => { const n = store.getSettings().nav || {}; return { order: Array.isArray(n.order) ? n.order : [], collapsed: n.collapsed && typeof n.collapsed === 'object' ? n.collapsed : {} }; };
+function navGroups() {
+  const { order } = navPrefs(), sections = NAV.filter(g => g.id);
+  const rank = g => { const i = order.indexOf(g.id); return i < 0 ? 100 + sections.indexOf(g) : i; };
+  return [...sections].sort((a, b) => rank(a) - rank(b));
+}
+const chevron = raw('<svg class="nav-chev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>');
+const grip = raw('<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>');
 
 const ROUTES = [
   [/^\/$/, homeView],
@@ -109,17 +118,75 @@ function renderShell(path) {
   const s = store.getSettings();
   const mode = s.mode;
   // most specific nav item that matches the current path
+  const prefs = navPrefs();
+  const link = i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`;
   const match = ALL_ITEMS.filter(i => i.path === path || (i.path !== '/' && path.startsWith(i.path + '/'))).sort((a, b) => b.path.length - a.path.length)[0];
   $('#sidebar').innerHTML = String(html`
     <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span>Ledgerline</span><span class="beta">beta</span></a>
     <div class="side-actions"><a class="btn primary" href="#/networth/update" data-tour="update">Update balances</a><button class="btn" data-quick-add data-tour="add" title="Add an expense (shortcut: N)">+ Expense</button></div>
-    <nav class="nav" data-tour="nav">${NAV.map(g => html`${g.group ? html`<div class="nav-group">${g.group}</div>` : ''}${g.items.map(i => html`<a href="#${i.path}" class="${match === i ? 'active' : ''}">${icon(i.icon)}<span>${i.label}</span></a>`)}`)}</nav>
+    <nav class="nav" data-tour="nav">${NAV.filter(g => !g.id).flatMap(g => g.items).map(link)}
+      ${navGroups().map(g => { const shut = !!prefs.collapsed[g.id], hasActive = g.items.includes(match);
+        return html`<div class="nav-section ${shut ? 'shut' : ''}" data-gid="${g.id}">
+          <div class="nav-group"><button type="button" class="nav-toggle" data-toggle="${g.id}" aria-expanded="${shut ? 'false' : 'true'}" title="${shut ? 'Show' : 'Hide'} ${g.group} pages">${chevron}<span>${g.group}</span>${shut && hasActive ? html`<i class="nav-dot" aria-hidden="true"></i>` : ''}</button>
+            <span class="nav-grip" data-grip="${g.id}" role="button" tabindex="0" title="Drag to move this section (or use ↑ ↓)" aria-label="Move the ${g.group} section">${grip}</span></div>
+          <div class="nav-items">${g.items.filter(i => !shut || i === match).map(link)}</div></div>`; })}</nav>
     <div class="sidebar-foot">
       <a href="#/settings" data-tour="settings" class="${path === '/settings' ? 'active' : ''}">${icon('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z')}<span>Settings & data</span></a>
       <div class="theme-switch" role="radiogroup" aria-label="Theme">${['light', 'dark', 'auto'].map(t => html`<button role="radio" data-theme-set="${t}" aria-checked="${(s.theme || 'auto') === t}">${THEME_LABEL[t]}</button>`)}</div>
       <div class="mode-badge" data-tour="mode" title="How much detail the forms ask for. Every page and chart is the same in both.">Input mode: <b>${mode === 'pro' ? 'Pro' : 'Simple'}</b> · <a href="#/settings">change</a></div>
     </div>`);
   $$('[data-theme-set]').forEach(b => b.onclick = async () => { await store.saveSettings({ theme: b.dataset.themeSet }); route(); });
+  wireNav(path);
+}
+
+async function saveNav(patch) {
+  const cur = navPrefs();
+  await store.saveSettings({ nav: null });   // replace, so removed keys really go away
+  await store.saveSettings({ nav: { ...cur, ...patch } });
+}
+function wireNav(path) {
+  const nav = $('#sidebar .nav');
+  nav.querySelectorAll('[data-toggle]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.toggle, collapsed = { ...navPrefs().collapsed };
+    if (collapsed[id]) delete collapsed[id]; else collapsed[id] = true;
+    await saveNav({ collapsed }); renderShell(path);
+  });
+  const saveOrder = async () => { await saveNav({ order: [...nav.querySelectorAll('.nav-section')].map(x => x.dataset.gid) }); renderShell(path); };
+  nav.querySelectorAll('[data-grip]').forEach(h => {
+    const sec = h.closest('.nav-section');
+    // keyboard: ↑ / ↓ moves the section
+    h.onkeydown = e => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      const sib = e.key === 'ArrowUp' ? sec.previousElementSibling : sec.nextElementSibling;
+      if (!sib?.classList.contains('nav-section')) return;
+      if (e.key === 'ArrowUp') sib.before(sec); else sib.after(sec);
+      const id = sec.dataset.gid;
+      saveOrder().then(() => $(`#sidebar [data-grip="${id}"]`)?.focus());
+    };
+    // mouse & touch: drag the handle; the other sections make room as you go
+    h.onpointerdown = e => {
+      if (e.button > 0) return;
+      e.preventDefault();
+      sec.classList.add('dragging');
+      const y0 = e.clientY; let moved = false;
+      const move = ev => {
+        const dy = ev.clientY - y0;
+        if (Math.abs(dy) > 3) moved = true;
+        const others = [...nav.querySelectorAll('.nav-section')].filter(x => x !== sec);
+        const target = others.find(x => { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+        if (target) { if (target !== sec.nextElementSibling) target.before(sec); }
+        else if (others.length && others.at(-1) !== sec.previousElementSibling) others.at(-1).after(sec);
+      };
+      const up = () => {
+        document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+        sec.classList.remove('dragging');
+        if (moved) saveOrder();
+      };
+      // listen on the document: moving the section in the DOM would drop pointer capture on the handle
+      document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+    };
+  });
 }
 
 // Switching light ↔ dark cross-fades the whole page (charts included) instead of snapping.

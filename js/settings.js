@@ -48,7 +48,7 @@ export default async function settingsView(el) {
             </label>
           </div>
           <p class="small muted mt">Each account keeps its own currency (set it when you add the account). Everything is converted into the display currency using ECB reference rates — historical snapshots use the rate on that date.</p>
-          <div class="row mt"><span class="spacer"></span><button class="btn primary">Save preferences</button></div>
+          <div class="row mt"><button type="button" class="btn sm ghost" data-act="nav-reset" title="Put the sidebar sections back in their original order and open them all">Reset sidebar</button><span class="spacer"></span><button class="btn primary">Save preferences</button></div>
         </form>
 
         <form class="card" id="lists">
@@ -150,6 +150,7 @@ export default async function settingsView(el) {
     if (!a) return;
     if (a === 'est-save') { await saveEstimates(el.querySelector('#est-card')); toast('Starting estimates saved'); refresh(); return; }
     if (a === 'tour') { startTour(); return; }
+    if (a === 'nav-reset') { await store.saveSettings({ nav: null }); await store.saveSettings({ nav: { order: [], collapsed: {} } }); toast('Sidebar reset'); refresh(); return; }
     if (a === 'fx') {
       const r = await refreshRates({ force: true });
       toast(r.ok ? 'Exchange rates updated' : 'Could not load rates: ' + (r.errors || []).join(' '), r.ok ? 'info' : 'error');
