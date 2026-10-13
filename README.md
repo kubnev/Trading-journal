@@ -14,7 +14,7 @@ Everything is stored in the browser (IndexedDB). There is no server, no account 
 **Live:** https://kubnev.github.io/Trading-journal/
 
 ## Net worth
-Six simple account types (Cash, Savings, Trading capital, Investments, Assets, Debt), or detailed categories in Pro mode.
+Six simple account types (Savings, Investments, Trading capital, Assets, Cash, Debt), or detailed categories in Pro mode.
 - dated balance snapshots; accounts with an APY grow daily between updates (APY changes keep the old rate for the past)
 - Accounts & holdings grouped by type with totals; holdings with live prices
 - custody, purpose, liquidity and concentration analytics; balance-sheet checks (cash runway, debt-to-asset…)

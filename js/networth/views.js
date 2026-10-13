@@ -10,7 +10,7 @@ import { go, refresh, query } from '../main.js';
 const RANGES = [['all', 'All'], ['1y', '1Y'], ['3y', '3Y'], ['5y', '5Y']];
 let nativeFirst = (() => { try { return localStorage.getItem('tj.nativeFirst') === '1'; } catch { return false; } })();
 let range = 'all';
-const catColor = (id, p) => { const i = assetCats().findIndex(c => c.id === id); return i >= 0 ? p.series[i % 8] : p.series[(liabCats().findIndex(c => c.id === id) + 2) % 8]; };
+export const catColor = (id, p) => { const c = assetCats().find(x => x.id === id); if (c) return p.series[(c.ci ?? 0) % 8]; return p.series[(liabCats().findIndex(x => x.id === id) + 2) % 8]; };
 // Categories beyond 8 share hues, so allocation charts fold small ones into "Other" (max 7 slices)
 function emptyNW() {
   return html`<div class="empty"><div class="empty-title">Start tracking your net worth</div><p>Add what you own (cash, investments, property) and what you owe (mortgage, loans, cards). Then update balances once a month — that's all it takes to build a history.</p>

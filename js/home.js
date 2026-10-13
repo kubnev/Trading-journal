@@ -5,7 +5,7 @@ import { html, money, pct, num, pnlClass, stat, fmtDate, today, dayKey, parseDay
 import { MOODS, streaks } from './journal/views.js';
 import * as C from './charts.js';
 import { nwSeries, assetCats, baseline, yearAgoEstimate, interestOverview } from './networth/calc.js';
-import { yieldCard, startTicker, lastUpdate, typeBreakdown } from './networth/views.js';
+import { yieldCard, startTicker, lastUpdate, typeBreakdown, catColor } from './networth/views.js';
 import * as S from './spend/calc.js';
 import { catLabel } from './spend/categories.js';
 import { loadDemo } from './demo.js';
@@ -90,7 +90,7 @@ export default async function home(el) {
 
   const p = C.palette();
   if (series.length > 1) C.moneyLine(el.querySelector('#o-nw'), { labels: series.map(x => fmtDate(x.date, { month: 'short', year: '2-digit' })), series: [{ label: 'Net worth', data: series.map(x => x.net), color: p.series[0], fill: true }, { label: 'Liquid net worth', data: series.map(x => x.liquidNet), color: p.series[2] }] });
-  if (alloc.length) C.doughnut(el.querySelector('#o-alloc'), { labels: alloc.map(c => c.label), values: alloc.map(c => cur.byCat[c.id]), colors: alloc.map(c => p.series[aCats.indexOf(c) % 8]), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
+  if (alloc.length) C.doughnut(el.querySelector('#o-alloc'), { labels: alloc.map(c => c.label), values: alloc.map(c => cur.byCat[c.id]), colors: alloc.map(c => catColor(c.id, p)), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
   const tick = startTicker(el);
   return () => clearInterval(tick);
 }

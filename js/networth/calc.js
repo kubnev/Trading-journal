@@ -3,19 +3,21 @@ import { all, getSettings } from '../store.js';
 import { toDisplay, ccyOf } from '../fx.js';
 import { today, monthKey, parseDay } from '../ui.js';
 
+// Display order: savings → investments → trading → things you own → cash (debts last).
+// ci = fixed colour slot, so a category keeps its colour whatever the order.
 // liquid: can be turned into cash within days without major loss
 export const ASSET_CATS = [
-  { id: 'cash', label: 'Cash & checking', liquid: true },
-  { id: 'savings', label: 'Savings & money market', liquid: true },
-  { id: 'brokerage', label: 'Taxable investments', liquid: true },
-  { id: 'trading', label: 'Trading accounts', liquid: true },
-  { id: 'retirement', label: 'Retirement & pension', liquid: false },
-  { id: 'crypto', label: 'Crypto', liquid: true },
-  { id: 'realestate', label: 'Real estate', liquid: false },
-  { id: 'business', label: 'Business equity', liquid: false },
-  { id: 'vehicle', label: 'Vehicles', liquid: false },
-  { id: 'receivable', label: 'Money owed to you', liquid: false },
-  { id: 'otherasset', label: 'Other assets', liquid: false },
+  { id: 'savings', label: 'Savings & money market', liquid: true, ci: 1 },
+  { id: 'brokerage', label: 'Taxable investments', liquid: true, ci: 2 },
+  { id: 'retirement', label: 'Retirement & pension', liquid: false, ci: 4 },
+  { id: 'crypto', label: 'Crypto', liquid: true, ci: 5 },
+  { id: 'business', label: 'Business equity', liquid: false, ci: 7 },
+  { id: 'trading', label: 'Trading accounts', liquid: true, ci: 3 },
+  { id: 'realestate', label: 'Real estate', liquid: false, ci: 6 },
+  { id: 'vehicle', label: 'Vehicles', liquid: false, ci: 8 },
+  { id: 'receivable', label: 'Money owed to you', liquid: false, ci: 9 },
+  { id: 'otherasset', label: 'Other assets', liquid: false, ci: 10 },
+  { id: 'cash', label: 'Cash & checking', liquid: true, ci: 0 },
 ];
 export const LIAB_CATS = [
   { id: 'mortgage', label: 'Mortgage', shortTerm: false },
@@ -30,11 +32,11 @@ export const LIAB_CATS = [
 // Simple input mode: five kinds of asset + debt. Every detailed category belongs to exactly one,
 // so switching modes never loses information (the detailed category is kept underneath).
 export const GROUPS = [
-  { id: 'cash', label: 'Cash', hint: 'Money you spend day to day — current account, card balance, wallet. Food, rent, going out.', cat: 'cash' },
-  { id: 'savings', label: 'Savings', hint: 'Money you put aside — savings accounts, deposits, money-market funds.', cat: 'savings' },
-  { id: 'trading', label: 'Trading capital', hint: 'Working capital in your trading accounts (broker, exchange).', cat: 'trading' },
-  { id: 'investments', label: 'Investments', hint: 'Long-term holdings you don’t actively trade — ETFs, stocks, crypto you hold, pension.', cat: 'brokerage' },
-  { id: 'assets', label: 'Assets', hint: 'Things you own outright — home, car, watches, collectibles, trading cards.', cat: 'otherasset' },
+  { id: 'savings', label: 'Savings', hint: 'Money you put aside — savings accounts, deposits, money-market funds.', cat: 'savings', ci: 1 },
+  { id: 'investments', label: 'Investments', hint: 'Long-term holdings you don’t actively trade — ETFs, stocks, crypto you hold, pension.', cat: 'brokerage', ci: 3 },
+  { id: 'trading', label: 'Trading capital', hint: 'Working capital in your trading accounts (broker, exchange).', cat: 'trading', ci: 2 },
+  { id: 'assets', label: 'Assets', hint: 'Things you own outright — home, car, watches, collectibles, trading cards.', cat: 'otherasset', ci: 4 },
+  { id: 'cash', label: 'Cash', hint: 'Money you spend day to day — current account, card balance, wallet. Food, rent, going out.', cat: 'cash', ci: 0 },
 ];
 export const DEBT = { id: 'debt', label: 'Debt', hint: 'Anything you owe — loans, credit card balance, money borrowed from someone.', cat: 'otherdebt' };
 const CAT_GROUP = { cash: 'cash', savings: 'savings', trading: 'trading', brokerage: 'investments', retirement: 'investments', crypto: 'investments', business: 'investments', realestate: 'assets', vehicle: 'assets', receivable: 'assets', otherasset: 'assets' };

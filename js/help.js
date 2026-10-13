@@ -16,7 +16,7 @@ const GUIDE = [
     <li><b>Cash runway</b> — how many months your cash and savings cover your usual spending.</li>
     <li>The range buttons (1Y/3Y/5Y) zoom the charts. With a single snapshot the trend charts wait for your second update.</li></ul>` },
   { id: 'accounts', title: 'Accounts & holdings', match: p => p === '/networth/accounts', body: `
-    <p>Every asset and debt, grouped by type (Cash, Savings, Trading capital, Investments, Assets, Debt — or the detailed categories in Pro input). Each group shows its total and share of your assets; the chips at the top jump to a group.</p>
+    <p>Every asset and debt, grouped by type (Savings, Investments, Trading capital, Assets, Cash, Debt — or the detailed categories in Pro input). Each group shows its total and share of your assets; the chips at the top jump to a group.</p>
     <ul><li><b>Interest / yield (APY)</b> — savings accounts, money-market funds, staking. The balance grows every day; the Interest page shows what it earns.</li>
     <li><b>Held at</b> (Pro) — bank, broker, crypto exchange, DeFi, self-custody wallet… used for counterparty-risk analytics.</li>
     <li><b>Purpose</b> (Pro) — e.g. Emergency fund, Trading capital. Shows as buckets in Analytics.</li>

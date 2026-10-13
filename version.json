@@ -1,6 +1,6 @@
 {
-  "version": "1.5.0",
-  "notes": "Collapsible, reorderable sidebar sections.",
+  "version": "1.5.1",
+  "notes": "New account type order.",
   "files": [
     "css/app.css",
     "js/backup.js",

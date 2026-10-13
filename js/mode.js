@@ -7,7 +7,7 @@ const SIMPLE = {
   title: 'Simple',
   lead: 'Quick, plain-language input.',
   points: [
-    'Accounts are one of six types: Cash, Savings, Trading capital, Investments, Assets, Debt',
+    'Accounts are one of six types: Savings, Investments, Trading capital, Assets, Cash, Debt',
     'Expenses: amount, category, date, a short note — and optionally the account it came from',
     'Subscriptions & bills: name, amount, charge day, account',
     'Everything else (liquidity, custody, purpose…) is worked out for you',
@@ -60,7 +60,7 @@ export async function switchMode(to) {
     ? `<p>Pro splits your accounts into finer categories — e.g. <b>Investments</b> becomes taxable investments, retirement, crypto or business; <b>Assets</b> becomes real estate, vehicles or other assets.</p>
        ${nAcc ? `<p>Your ${nAcc} account${nAcc === 1 ? ' is' : 's are'} placed in the closest Pro category automatically. <b>Review them on Accounts</b> and adjust the category, custody, purpose and liquidity where it matters — your analytics get more accurate.</p>` : ''}
        <p class="small muted">The expense form also gets subcategory, merchant, payment method, tags and more.</p>`
-    : `<p>Simple groups everything into six types: Cash, Savings, Trading capital, Investments, Assets and Debt.</p>
+    : `<p>Simple groups everything into six types: Savings, Investments, Trading capital, Assets, Cash and Debt.</p>
        ${nAcc ? `<p><b>Nothing is deleted or reset.</b> Each detailed category falls into one of the six types, and the details you set (category, custody, purpose…) are kept — they come back if you switch to Pro again.</p>` : ''}
        <p class="small muted">Extra Pro fields are hidden from the forms; values you already entered stay on your transactions.</p>`;
   const ok = await modal({ title: `Switch to ${to === 'pro' ? 'Pro' : 'Simple'} input?`, body, actions: [{ label: 'Cancel' }, { label: `Switch to ${to === 'pro' ? 'Pro' : 'Simple'}`, kind: 'primary', value: () => true }] });
