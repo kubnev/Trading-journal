@@ -65,6 +65,12 @@ export function startTicker(root) {
   return setInterval(() => { const el = root.querySelector('[data-earned]'); if (el) { const y = yieldSummary(); el.textContent = money(y.earnedToday, { decimals: tickDecimals(y.perSecond) }); } }, 1000);
 }
 
+// The type order used everywhere (Savings → Investments → Trading → Assets → Cash → Debt, or the Pro
+// categories in the same order); inside a type, the biggest balance first.
+const typeList = () => [...assetCats().map(c => ({ ...c, debt: false })), ...liabCats().map(c => ({ ...c, debt: true }))];
+const typeIdx = a => typeList().findIndex(t => t.id === catKey(a) && t.debt === (a.kind === 'liability'));
+export const byType = point => (a, b) => typeIdx(a) - typeIdx(b) || (point.byAcct[b.id] || 0) - (point.byAcct[a.id] || 0) || a.name.localeCompare(b.name);
+
 // Net worth by type as bars — used when there's only one balance update, so there's no trend to draw yet
 export function typeBreakdown(cur) {
   const p = C.palette();
@@ -169,7 +175,7 @@ export async function overview(el) {
       </div>`}
       <div class="card mt" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><h2>Accounts</h2><div class="row">${multiCcy ? html`<div class="seg sm" role="radiogroup" aria-label="Show balances in"><button data-native="0" class="${nativeFirst ? '' : 'on'}">${displayCcy()}</button><button data-native="1" class="${nativeFirst ? 'on' : ''}">Own currency</button></div>` : ''}<a class="hint" href="#/networth/accounts">Manage →</a></div></div>
         <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Account</th><th>Type</th><th>Liquid</th><th class="num">Balance</th><th class="num">Change</th><th class="num">% of assets</th><th style="width:120px">Trend</th></tr></thead>
-        <tbody>${accts.filter(a => !a.archivedAt).sort((a, b) => (a.kind === 'liability') - (b.kind === 'liability') || (cur.byAcct[b.id] || 0) - (cur.byAcct[a.id] || 0)).map(a => {
+        <tbody>${accts.filter(a => !a.archivedAt).sort(byType(cur)).map(a => {
           const v = cur.byAcct[a.id] || 0, pv = prev ? prev.byAcct[a.id] || 0 : null;
           const d = pv == null ? null : (a.kind === 'liability' ? -(v - pv) : v - pv);
           return html`<tr><td><b>${a.name}</b>${a.institution ? html` <span class="muted small">${a.institution}</span>` : ''}</td><td>${typeLabel(a)}</td><td>${a.kind === 'liability' ? '' : isLiquid(a) ? 'Yes' : 'No'}</td>
@@ -205,22 +211,23 @@ export const lastUpdate = () => store.all('nwSnapshots').map(s => s.date).filter
 
 // ================= update balances =================
 export async function update(el) {
-  const accts = store.all('nwAccounts').filter(a => !a.archivedAt).sort((a, b) => (a.kind === 'liability') - (b.kind === 'liability') || a.name.localeCompare(b.name));
   const snaps = [...store.all('nwSnapshots')].sort((a, b) => b.date.localeCompare(a.date));
   const date = query().get('date') || today();
   const existing = snaps.find(s => s.date === date);
   const prior = pointAt(date);
+  const accts = store.all('nwAccounts').filter(a => !a.archivedAt).sort(byType(prior));
   el.innerHTML = String(html`<div class="page-head"><div><h1>Update balances</h1><div class="sub">Record what each account is worth on a date. Monthly (e.g. first of the month) is the sweet spot.</div></div>
       <div class="actions">${priceBtn()}<label class="row small">Snapshot date <input type="date" id="sd" value="${date}"></label></div></div>
     ${!accts.length ? html`<div class="empty"><div class="empty-title">No accounts yet</div><p>Add your assets and debts first.</p><a class="btn primary" href="#/networth/accounts">+ Add accounts</a><button class="btn" data-demo>Load demo data</button></div>` : html`
     <form id="uf" class="stack">
       ${existing ? html`<div class="note">Editing the existing snapshot for ${fmtDate(date)}.</div>` : html`<div class="note">Fields are pre-filled with the latest known values — change only what moved.</div>`}
-      ${[['asset', 'Assets'], ['liability', 'Liabilities']].map(([k, l]) => {
-        const list = accts.filter(a => (a.kind === 'liability') === (k === 'liability'));
+      ${typeList().map(t => {
+        const k = t.debt ? 'liability' : 'asset';
+        const list = accts.filter(a => catKey(a) === t.id && (a.kind === 'liability') === t.debt);
         if (!list.length) return '';
-        return html`<fieldset><legend>${l}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
+        return html`<fieldset><legend>${t.label}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
           const v = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcctNative[a.id] || '';
-          return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)} · ${typeLabel(a)}${a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
+          return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)}${a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
             <input type="number" step="any" name="${a.id}" value="${a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
         })}</div></fieldset>`;
       })}

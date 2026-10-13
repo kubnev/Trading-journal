@@ -1,6 +1,6 @@
 {
-  "version": "1.5.1",
-  "notes": "New account type order.",
+  "version": "1.5.2",
+  "notes": "Type order on Update balances and the Net worth table.",
   "files": [
     "css/app.css",
     "js/backup.js",
