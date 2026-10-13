@@ -226,7 +226,8 @@ export async function update(el) {
         const list = accts.filter(a => catKey(a) === t.id && (a.kind === 'liability') === t.debt);
         if (!list.length) return '';
         return html`<fieldset><legend>${t.label}</legend><div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${list.map(a => {
-          const v = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcctNative[a.id] || '';
+          const raw0 = existing && a.id in (existing.balances || {}) ? existing.balances[a.id] : prior.byAcctNative[a.id] || '';
+          const v = raw0 === '' || raw0 == null || !isFinite(+raw0) ? '' : Math.round(+raw0 * 100) / 100;
           return html`<label class="field">${a.name} <span class="hint">${ccyOf(a)}${a.tracksHoldings ? ' · from holdings × prices' : +a.apy ? ` · grows ${a.apy}% APY daily` : ''}</span>
             <input type="number" step="any" name="${a.id}" value="${a.tracksHoldings && date === today() ? Math.round(holdingsTotal(a) * 100) / 100 : v}" ${a.tracksHoldings ? raw('disabled') : ''} ${k === 'liability' ? raw('min="0" placeholder="amount owed"') : ''}></label>`;
         })}</div></fieldset>`;
@@ -432,11 +433,12 @@ export async function accounts(el) {
   const cur = pointAt(today());
   const totalAssets = cur.assets || 0;
   const sec = (title, list, { hint = '', debt = false } = {}) => { const tot = list.filter(a => !a.archivedAt).reduce((s, a) => s + (cur.byAcct[a.id] || 0), 0); return html`<div class="card mt acct-group" style="padding:0"><div class="card-head" style="padding:14px 16px 0"><div><h2>${title}</h2>${hint ? html`<div class="small muted">${hint}</div>` : ''}</div><span class="hint"><b class="${debt ? 'neg' : ''}">${money(debt ? -tot : tot)}</b>${!debt && totalAssets ? html` · ${pct(tot / totalAssets, 1)} of assets` : ''}</span></div>
-    <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>Institution</th><th>Details</th><th class="num">Balance</th><th></th></tr></thead><tbody>
-    ${list.map(a => html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${+a.apy ? html` <span class="tag accent">${a.apy}% APY</span>` : a.kind !== 'liability' && groupOf(a) === 'savings' ? html` <span class="tag">0% APY</span>` : ''}${a.kind === 'liability' && +a.rate ? html` <span class="tag">${a.rate}% APR</span>` : ''}</td><td>${a.institution || ''}</td>
+    <div class="table-wrap" style="border:0"><table class="data"><thead><tr><th>Name</th><th>${simpleMode() ? 'Yield' : 'Institution'}</th><th>Details</th><th class="num">Balance</th><th></th></tr></thead><tbody>
+    ${list.map(a => { const yieldTag = +a.apy ? html`<span class="tag accent">${a.apy}% APY</span>` : a.kind !== 'liability' && groupOf(a) === 'savings' ? html`<span class="tag">0% APY</span>` : a.kind === 'liability' && +a.rate ? html`<span class="tag">${a.rate}% APR</span>` : '';
+      return html`<tr ${a.archivedAt ? raw('style="opacity:.55"') : ''}><td><b>${a.name}</b>${a.archivedAt ? html` <span class="tag">closed ${fmtDate(a.archivedAt)}</span>` : ''}${!simpleMode() && yieldTag ? html` ${yieldTag}` : ''}</td><td>${simpleMode() ? (yieldTag || html`<span class="muted">—</span>`) : a.institution || ''}</td>
       <td class="small muted">${a.kind === 'liability' ? [typeLabel(a), a.payment ? `${moneyIn(+a.payment, ccyOf(a))}/mo` : ''].filter(Boolean).join(' · ') : [simpleMode() ? '' : typeLabel(a), custodyLabel(custodyOf(a)), purposeOf(a), isLiquid(a) ? 'liquid' : 'illiquid'].filter(Boolean).join(' · ')}</td>
       <td class="num ${a.kind === 'liability' ? 'neg' : ''}">${moneyIn((a.kind === 'liability' ? -1 : 1) * (cur.byAcctNative[a.id] || 0), ccyOf(a))}${!sameMoney(ccyOf(a), displayCcy()) ? html`<div class="dist">≈ ${money((a.kind === 'liability' ? -1 : 1) * (cur.byAcct[a.id] || 0))}</div>` : ''}</td>
-      <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`)}
+      <td style="text-align:right;white-space:nowrap">${a.tracksHoldings ? html`<button class="btn sm" data-hold="${a.id}">Holdings</button> ` : ''}<button class="btn sm" data-edit="${a.id}">Edit</button> <button class="btn sm" data-arch="${a.id}">${a.archivedAt ? 'Reopen' : 'Close'}</button> <button class="icon-btn" data-del="${a.id}" aria-label="Delete">✕</button></td></tr>`; })}
     </tbody></table></div></div>`; };
   // grouped by type (the six Simple types, or the detailed Pro categories); biggest first inside each group
   const order = (a, b) => !!a.archivedAt - !!b.archivedAt || (cur.byAcct[b.id] || 0) - (cur.byAcct[a.id] || 0) || a.name.localeCompare(b.name);

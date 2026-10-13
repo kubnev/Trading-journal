@@ -112,6 +112,7 @@ const H = {
   'Adjust by': 'Roughly how much to add (+) or remove (−) to hit the target allocation.',
   'Target %': 'The share of assets you want in this category. Should add up to 100%.',
   'Current': 'The share of your assets in this category today.',
+  'Yield': 'Interest the account earns per year (APY), or the interest rate on a debt (APR). Set it with Edit.',
   'Latest balance': 'Most recent recorded value, in the account’s own currency.',
   'Details': 'Custody, purpose, yield and liquidity — or rate and payment for debts.',
   'Guideline': 'A common rule of thumb. Context matters — treat it as a prompt, not a rule.',

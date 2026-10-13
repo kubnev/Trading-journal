@@ -1,6 +1,6 @@
 {
-  "version": "1.5.2",
-  "notes": "Type order on Update balances and the Net worth table.",
+  "version": "1.5.3",
+  "notes": "Yield column in Simple; 2-decimal prefills.",
   "files": [
     "css/app.css",
     "js/backup.js",

@@ -1,9 +1,10 @@
 // App version + "check for update". The site is static (GitHub Pages), so an update
 // means: fetch version.json fresh, and if it's newer, re-download every app file into
 // the browser cache and reload. Bump APP_VERSION *and* version.json together.
-export const APP_VERSION = '1.5.2';
+export const APP_VERSION = '1.5.3';
 
 export const CHANGELOG = [
+  ['1.5.3', 'Accounts & holdings in Simple input: a Yield column (APY, or APR for debts) replaces Institution, which Simple doesn’t ask for. Update balances pre-fills grown balances with 2 decimals instead of many.'],
   ['1.5.2', 'Update balances is grouped by account type in the same order (Savings → Investments → Trading capital → Assets → Cash → Debt), biggest balance first in each group. The accounts table on Net worth uses that order too.'],
   ['1.5.1', 'Account types are now listed Savings → Investments → Trading capital → Assets → Cash → Debt (Accounts & holdings, the add-account form, charts and tables; Pro categories follow the same order). Each type keeps its colour.'],
   ['1.5.0', 'Sidebar: fold any section away by clicking its title, and drag sections into the order you want (handle on hover; arrow keys work too). Both are remembered; Settings → Reset sidebar puts it back.'],
