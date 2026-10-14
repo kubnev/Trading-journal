@@ -2,6 +2,7 @@
 import { html, money, pct, num, stat, fmtDate, dayKey } from '../ui.js';
 import * as C from '../charts.js';
 import { interestOverview, typeLabel } from './calc.js';
+import { monthYear } from './views.js';
 import { ccyOf, moneyIn, sameMoney, displayCcy } from '../fx.js';
 
 // ================= interest =================
@@ -37,7 +38,7 @@ export async function interest(el) {
   const labels = [], cum = [];
   const now = new Date();
   for (let m = 1; m <= 12; m++) {
-    labels.push(fmtDate(dayKey(new Date(now.getFullYear(), now.getMonth() + m, 1)), { month: 'short', year: '2-digit' }));
+    labels.push(monthYear(dayKey(new Date(now.getFullYear(), now.getMonth() + m, 1))));
     cum.push(io.earn.reduce((s, x) => s + x.value * (Math.pow(1 + x.apy / 100, m / 12) - 1), 0));
   }
   C.moneyLine(el.querySelector('#i-proj'), { labels, zero: true, series: [{ label: 'Interest earned', data: cum, color: p.pos, fill: true }] });

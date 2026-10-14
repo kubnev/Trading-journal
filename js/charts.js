@@ -85,7 +85,7 @@ export function moneyLine(canvas, { labels, series, zero = false, stepped = fals
         borderColor: s.color || p.series[i],
         backgroundColor: s.fill ? (typeof s.fill === 'string' ? s.fill : alpha(s.color || p.series[i], 0.12)) : 'transparent',
         fill: s.fill ? (s.fillTarget ?? 'origin') : false,
-        tension: s.tension ?? 0.15,
+        tension: s.tension ?? 0.15, cubicInterpolationMode: 'monotone',
         stepped,
         borderDash: s.dash || [],
         pointRadius: s.points ? 2 : labels.length <= 3 ? 4 : 0,

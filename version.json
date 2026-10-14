@@ -1,6 +1,6 @@
 {
-  "version": "1.5.3",
-  "notes": "Yield column in Simple; 2-decimal prefills.",
+  "version": "1.5.4",
+  "notes": "Clearer net-worth chart dates and scale.",
   "files": [
     "css/app.css",
     "js/backup.js",

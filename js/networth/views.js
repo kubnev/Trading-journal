@@ -65,6 +65,15 @@ export function startTicker(root) {
   return setInterval(() => { const el = root.querySelector('[data-earned]'); if (el) { const y = yieldSummary(); el.textContent = money(y.earnedToday, { decimals: tickDecimals(y.perSecond) }); } }, 1000);
 }
 
+// Chart labels for snapshot dates: "Oct 6" while the history is short, "Oct ’26" once it spans many
+// months (a bare "Oct 26" reads like the 26th).
+export const monthYear = d => `${fmtDate(d, { month: 'short' })} ’${d.slice(2, 4)}`;
+export function dateLabels(dates) {
+  if (!dates.length) return [];
+  const span = (parseDay(dates.at(-1)) - parseDay(dates[0])) / 864e5;
+  return span <= 200 ? dates.map(d => fmtDate(d, { month: 'short', day: 'numeric' })) : dates.map(monthYear);
+}
+
 // The type order used everywhere (Savings → Investments → Trading → Assets → Cash → Debt, or the Pro
 // categories in the same order); inside a type, the biggest balance first.
 const typeList = () => [...assetCats().map(c => ({ ...c, debt: false })), ...liabCats().map(c => ({ ...c, debt: true }))];
@@ -141,7 +150,7 @@ export async function overview(el) {
         ${stat(html`Cash runway${estTag(base.estimated.spending)}`, efMonths != null ? `${num(efMonths, 1)} mo` : '—', { cls: efMonths != null && efMonths < 3 ? 'neg' : '', sub: efMonths != null ? 'cash & savings ÷ monthly spending' : html`log spending or add an <a href="#/setup">estimate</a>`, help: 'How many months your cash and savings would cover your usual monthly spending.' })}
       </div>
       <div class="grid g-2-1 mt">
-        <div class="card"><div class="card-head"><h2>Net worth over time</h2><span class="hint">net worth, assets & debts</span></div>
+        <div class="card"><div class="card-head"><h2>Net worth over time</h2><span class="hint">${allSeries.some(s => s.liabilities > 0) ? 'net worth, assets & debts' : 'each point is a balance update'}</span></div>
           ${one ? html`<div class="first-snap">${typeBreakdown(cur)}<p class="muted small" style="margin:0">One balance update so far (${fmtDate(cur.date)}). Each update adds a point — update again next month and your trend line starts here. Assets by type and change per update appear then too. <a href="#/networth/update">Update balances →</a></p></div>` : html`<div class="chart tall"><canvas id="n-line"></canvas></div>`}</div>
         <div class="card"><div class="card-head"><h2>Asset allocation</h2><span class="hint">by type</span></div><div class="chart tall"><canvas id="n-alloc"></canvas></div></div>
       </div>
@@ -183,20 +192,22 @@ export async function overview(el) {
         })}</tbody>
         <tfoot><tr><td colspan="3">Net worth</td><td class="num">${money(cur.net)}</td><td class="num ${pnlClass(ch)}">${ch != null ? money(ch, { sign: true }) : ''}</td><td colspan="2"></td></tr></tfoot></table></div></div>`);
 
-    const labels = series.map(s => fmtDate(s.date, { month: 'short', year: '2-digit' }));
+    const labels = dateLabels(series.map(s => s.date));
+    const hasDebt = series.some(s => s.liabilities > 0);
     if (!one) C.moneyLine(body.querySelector('#n-line'), {
       labels,
-      series: [{ label: 'Net worth', data: series.map(s => s.net), color: p.series[0], fill: true }, { label: 'Assets', data: series.map(s => s.assets), color: p.series[2] }, { label: 'Debts', data: series.map(s => s.liabilities), color: p.series[1] }],
+      // assets & debts only add a line when there are debts (otherwise assets = net worth and debts sit at 0, flattening the chart)
+      series: [{ label: 'Net worth', data: series.map(s => s.net), color: p.series[0], fill: !hasDebt }, ...(hasDebt ? [{ label: 'Assets', data: series.map(s => s.assets), color: p.series[2] }, { label: 'Debts', data: series.map(s => s.liabilities), color: p.series[1] }] : [])],
     });
     C.doughnut(body.querySelector('#n-alloc'), { labels: aCats.map(c => c.label), values: aCats.map(c => cur.byCat[c.id]), colors: aCats.map(c => catColor(c.id, p)), center: { value: money(cur.assets, { compact: true }), label: 'assets' } });
     if (!one) {
       const cats = assetCats().filter(c => series.some(s => (s.byCat[c.id] || 0) > 0));
       C.make(body.querySelector('#n-stack'), {
         type: 'line',
-        data: { labels, datasets: cats.map(c => ({ label: c.label, data: series.map(s => s.byCat[c.id] || 0), borderColor: catColor(c.id, p), backgroundColor: C.alpha(catColor(c.id, p), 0.55), fill: true, borderWidth: 1, tension: 0.15, pointRadius: 0 })) },
+        data: { labels, datasets: cats.map(c => ({ label: c.label, data: series.map(s => s.byCat[c.id] || 0), borderColor: catColor(c.id, p), backgroundColor: C.alpha(catColor(c.id, p), 0.55), fill: true, borderWidth: 1, tension: 0.15, cubicInterpolationMode: 'monotone', pointRadius: 0 })) },
         options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}` } } }, scales: { x: C.plainAxis({ ticks: { maxTicksLimit: 8, maxRotation: 0 } }), y: { stacked: true, ...C.moneyAxis() } } },
       });
-      C.signBars(body.querySelector('#n-chg'), { labels: chg.map(d => fmtDate(d.date, { month: 'short', year: '2-digit' })), values: chg.map(d => d.change) });
+      C.signBars(body.querySelector('#n-chg'), { labels: dateLabels(chg.map(d => d.date)), values: chg.map(d => d.change) });
       body.querySelectorAll('[data-spark]').forEach(cv => { const id = cv.dataset.spark; const a = store.get('nwAccounts', id); C.sparkline(cv, series.map(s => s.byAcct[id] || 0), a.kind === 'liability' ? p.series[1] : p.series[0]); });
     }
     if (lCats.length) C.doughnut(body.querySelector('#n-debt'), { labels: lCats.map(c => c.label), values: lCats.map(c => cur.byCat[c.id]), colors: lCats.map(c => catColor(c.id, p)), center: { value: money(cur.liabilities, { compact: true }), label: 'owed' } });
@@ -587,7 +598,7 @@ export async function analytics(el, _p, { mode }) {
   const used = CUSTODY.filter(c => series.some(s => (s.byCustody[c.id] || 0) > 0));
   if (series.length > 1) C.make(body.querySelector('#a-custt'), {
     type: 'line',
-    data: { labels: series.map(s => fmtDate(s.date, { month: 'short', year: '2-digit' })), datasets: used.map(c => { const col = p.series[CUSTODY.findIndex(x => x.id === c.id) % 8]; return { label: c.label, data: series.map(s => s.byCustody[c.id] || 0), borderColor: col, backgroundColor: C.alpha(col, 0.5), fill: true, borderWidth: 1, tension: 0.15, pointRadius: 0 }; }) },
+    data: { labels: dateLabels(series.map(s => s.date)), datasets: used.map(c => { const col = p.series[CUSTODY.findIndex(x => x.id === c.id) % 8]; return { label: c.label, data: series.map(s => s.byCustody[c.id] || 0), borderColor: col, backgroundColor: C.alpha(col, 0.5), fill: true, borderWidth: 1, tension: 0.15, cubicInterpolationMode: 'monotone', pointRadius: 0 }; }) },
     options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${money(c.parsed.y)}` } } }, scales: { x: C.plainAxis({ ticks: { maxTicksLimit: 8, maxRotation: 0 } }), y: { stacked: true, ...C.moneyAxis() } } },
   });
 }
